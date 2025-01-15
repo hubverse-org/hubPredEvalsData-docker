@@ -1,4 +1,9 @@
 FROM ghcr.io/hubverse-org/test-docker-hubutils-dev:main AS base
+ARG YQ_VERSION="v4.44.3"
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
 
 WORKDIR /project
 
@@ -9,5 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 curl \
 jq \
 && rm -rf /var/lib/apt/lists/*
+RUN wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64.tar.gz -O - |\
+  tar xz && mv yq_linux_amd64 /usr/bin/yq
 
 COPY scripts/create-predeval-data.R /bin
