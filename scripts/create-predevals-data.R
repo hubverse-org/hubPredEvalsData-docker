@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # DOC
 #
-# Calculate eval scores data and a predeval-config.json file
+# Calculate eval scores data and a predevals-config.json file
 #
 # USAGE
 #
@@ -19,20 +19,20 @@
 #
 #   ```
 #   prefix="https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads"
-#   cfg="${prefix}/main/predeval-config.yml"
+#   cfg="${prefix}/main/predevals-config.yml"
 #   oracle="${prefix}/oracle-data/oracle-output.csv"
 #
 #   tmp=$(mktemp -d)
 #   git clone https://github.com/cdcepi/FluSight-forecast-hub.git $tmp
 #
-#   create-predeval-data.R -h $tmp -c $cfg -d $oracle
+#   create-predevals-data.R -h $tmp -c $cfg -d $oracle
 #   ```
 # DOC
 
 args <- commandArgs(trailingOnly = TRUE)
 print_help <- function() {
-  if (file.exists("/bin/create-predeval-data.R")) {
-    script <- readLines("/bin/create-predeval-data.R")
+  if (file.exists("/bin/create-predevals-data.R")) {
+    script <- readLines("/bin/create-predevals-data.R")
     bookends <- which(script == "# DOC")
     writeLines(sub("# ?", "", script[(bookends[1] + 1):(bookends[2] - 1)], perl = TRUE))
     quit(save = "no", status = 0)
@@ -54,7 +54,7 @@ parse_args <- function(args, flag) {
 }
 
 hub_path <- parse_args(args, "-h")
-predeval_config_path <- parse_args(args, "-c")
+predevals_config_path <- parse_args(args, "-c")
 oracle_output <- readr::read_csv(parse_args(args, "-d"))
 output_dir <- parse_args(args, "-o")
 if (is.na(output_dir)) {
@@ -62,22 +62,22 @@ if (is.na(output_dir)) {
 }
 
 out_path <- fs::path(output_dir, "scores")
-out_cfg <- fs::path(output_dir, "predeval-options.json")
+out_cfg <- fs::path(output_dir, "predevals-options.json")
 if (!dir.exists(out_path)) {
   dir.create(out_path)
 }
 
-hubPredEvalsData::generate_eval_data(hub_path, predeval_config_path, out_path, oracle_output)
+hubPredEvalsData::generate_eval_data(hub_path, predevals_config_path, out_path, oracle_output)
 
 # create json objects used for initializing the dashboard
-# config <- hubPredEvalsData:::read_config(hub_path, predeval_config_path)
-config <- yaml::read_yaml(predeval_config_path)
+# config <- hubPredEvalsData:::read_config(hub_path, predevals_config_path)
+config <- yaml::read_yaml(predevals_config_path)
 
 # update config with additional options
 # TODO: move this into a function in hubPredEvalsData
-predeval_options <- config
-predeval_options$targets <- purrr::map(
-  predeval_options$targets,
+predevals_options <- config
+predevals_options$targets <- purrr::map(
+  predevals_options$targets,
   function(target) {
     if (length(target$relative_metrics) > 0) {
       target$metrics <- purrr::map(
@@ -94,4 +94,4 @@ predeval_options$targets <- purrr::map(
     }
   }
 )
-jsonlite::write_json(predeval_options, out_cfg, auto_unbox = TRUE)
+jsonlite::write_json(predevals_options, out_cfg, auto_unbox = TRUE)

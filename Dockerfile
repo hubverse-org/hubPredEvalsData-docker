@@ -18,4 +18,4 @@ jq \
 RUN curl -ssL -o - https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64.tar.gz |\
   tar xz && mv yq_linux_amd64 /usr/bin/yq
 
-COPY scripts/create-predeval-data.R /bin
+COPY scripts/create-predevals-data.R /bin
