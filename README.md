@@ -29,7 +29,6 @@ help documentation if you pass `--help` to it.
 
 ```sh
 docker run --rm -it \
--v "$(pwd)":/project \
 ghcr.io/hubverse-org/hubpredevalsdata-docker:main \
 create-predevals-data.R --help
 ```
