@@ -29,14 +29,12 @@
 #   ```
 # DOC
 
-args <- commandArgs(trailingOnly = TRUE)
-print_help <- function() {
-  if (file.exists("/bin/create-predevals-data.R")) {
-    script <- readLines("/bin/create-predevals-data.R")
-    bookends <- which(script == "# DOC")
-    writeLines(sub("# ?", "", script[(bookends[1] + 1):(bookends[2] - 1)], perl = TRUE))
-    quit(save = "no", status = 0)
-  }
+args <- commandArgs()
+print_help <- function(script) {
+  lines <- readLines(script)
+  bookends <- which(lines == "# DOC")
+  writeLines(sub("# ?", "", lines[(bookends[1] + 1):(bookends[2] - 1)], perl = TRUE))
+  quit(save = "no", status = 0)
 }
 
 ci_cat <- function(...) {
@@ -48,7 +46,8 @@ ci_cat <- function(...) {
 }
 parse_args <- function(args, flag) {
   if (any(args == "--help")) {
-    print_help()
+    script <- sub("--file=", "", args[startsWith(args, "--file")], fixed = TRUE)
+    print_help(script)
   }
   args[which(args == flag) + 1]
 }
