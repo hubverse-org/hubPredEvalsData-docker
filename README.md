@@ -65,7 +65,7 @@ create-predevals-data.R -h $tmp -c $cfg -d $oracle
 
 ## Updating
 
-Because hubPredEvalsData is constantly improving, this container needs to be
+Because hubPredEvalsData is constantly improving, this image needs to be
 rebuilt with the updated version. This can be achieved by running the update
 script:
 
