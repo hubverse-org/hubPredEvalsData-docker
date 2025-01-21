@@ -5,38 +5,36 @@
 #
 # USAGE
 #
-#    validate.R [--help] -h [/path/to/hub] -c [cfg] -d [oracle] -o [dir]
+#    create-predevals-data.R [--help] -h </path/to/hub> -c <cfg> -d <oracle> [-o <dir>]
 #
 # ARGUMENTS
 # 
 #   --help             print help and exit
-#   -h [/path/to/hub]  path to a local copy of the hub
-#   -c [cfg]           path or URL of predevals config file
-#   -d [oracle]        path or URL to oracle output data
-#   -o [dir]           output directory
+#   -h </path/to/hub>  path to a local copy of the hub
+#   -c <cfg>           path or URL of predevals config file
+#   -d <oracle>        path or URL to oracle output data
+#   -o <dir>           output directory
 # 
 # EXAMPLE
 #
-#   ```
-#   prefix="https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads"
-#   cfg="${prefix}/main/predevals-config.yml"
-#   oracle="${prefix}/oracle-data/oracle-output.csv"
+# ```
+# prefix="https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads"
+# cfg="${prefix}/main/predevals-config.yml"
+# oracle="${prefix}/oracle-data/oracle-output.csv"
 #
-#   tmp=$(mktemp -d)
-#   git clone https://github.com/cdcepi/FluSight-forecast-hub.git $tmp
+# tmp=$(mktemp -d)
+# git clone https://github.com/cdcepi/FluSight-forecast-hub.git $tmp
 #
-#   create-predevals-data.R -h $tmp -c $cfg -d $oracle
-#   ```
+# create-predevals-data.R -h $tmp -c $cfg -d $oracle
+# ```
 # DOC
 
-args <- commandArgs(trailingOnly = TRUE)
-print_help <- function() {
-  if (file.exists("/bin/create-predevals-data.R")) {
-    script <- readLines("/bin/create-predevals-data.R")
-    bookends <- which(script == "# DOC")
-    writeLines(sub("# ?", "", script[(bookends[1] + 1):(bookends[2] - 1)], perl = TRUE))
-    quit(save = "no", status = 0)
-  }
+args <- commandArgs()
+print_help <- function(script) {
+  lines <- readLines(script)
+  bookends <- which(lines == "# DOC")
+  writeLines(sub("# ?", "", lines[(bookends[1] + 1):(bookends[2] - 1)], perl = TRUE))
+  quit(save = "no", status = 0)
 }
 
 ci_cat <- function(...) {
@@ -48,7 +46,8 @@ ci_cat <- function(...) {
 }
 parse_args <- function(args, flag) {
   if (any(args == "--help")) {
-    print_help()
+    script <- sub("--file=", "", args[startsWith(args, "--file")], fixed = TRUE)
+    print_help(script)
   }
   args[which(args == flag) + 1]
 }
