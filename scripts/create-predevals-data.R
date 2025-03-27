@@ -89,8 +89,8 @@ predevals_options$targets <- purrr::map(
           }
         }
       ) |> unlist()
-      return(target)
     }
+    return(target)
   }
 )
 jsonlite::write_json(predevals_options, out_cfg, auto_unbox = TRUE)
