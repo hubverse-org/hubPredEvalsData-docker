@@ -55,6 +55,11 @@ parse_args <- function(args, flag) {
 hub_path <- parse_args(args, "-h")
 predevals_config_path <- parse_args(args, "-c")
 oracle_output <- readr::read_csv(parse_args(args, "-d"))
+# Remove as_of column (it will cause errors downstream)
+# NOTE: we are assuming here that no hubs have a target called "as_of"
+if ("as_of" %in% names(oracle_output)) {
+  oracle_output <- oracle_output[setdiff(names(oracle_output), "as_of")]
+}
 output_dir <- parse_args(args, "-o")
 if (is.na(output_dir)) {
   output_dir <- getwd()
