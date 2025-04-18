@@ -62,6 +62,23 @@ create-predevals-data.R -h $tmp -c $cfg -d $oracle
 ```
 ````
 
+## Example
+
+This is an example of running this container with the [reichlab/flu-metrocast hub](https://github.com/reichlab/flu-metrocast/tree/main).
+
+```sh
+# setup --------------------------------------------------------------
+git clone https://github.com/reichlab/flu-metrocast.git flu-metrocast
+cd flu-metrocast
+mkdir -p predevals/data
+cfg=https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/main/predevals-config.yml
+
+# run the container
+docker run --rm -it --platform=linux/amd64 -v "$(pwd)":"/project" \
+ghcr.io/hubverse-org/hubpredevalsdata-docker:main \
+create-predevals-data.R -h /project -c $cfg -d /project/target-data/oracle-output.csv -o /project/predevals/data
+```
+
 ## Updating
 
 Because hubPredEvalsData is constantly improving, this image needs to be
