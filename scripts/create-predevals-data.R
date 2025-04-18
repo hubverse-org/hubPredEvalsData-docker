@@ -21,11 +21,12 @@
 # prefix="https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads"
 # cfg="${prefix}/main/predevals-config.yml"
 # oracle="${prefix}/oracle-data/oracle-output.csv"
+# mkdir -p evals
 #
 # tmp=$(mktemp -d)
 # git clone https://github.com/cdcepi/FluSight-forecast-hub.git $tmp
 #
-# create-predevals-data.R -h $tmp -c $cfg -d $oracle
+# create-predevals-data.R -h $tmp -c $cfg -d $oracle -o evals
 # ```
 # DOC
 
