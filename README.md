@@ -5,7 +5,7 @@ This docker container is a wrapper around
 from
 [hubverse-org/hubPredEvalsData](https://github.com/hubverse-org/hubPredEvalsData),
 which is used to generate tables of evaluation data from a hub's [oracle
-output](https://hubverse.io/en/latest/user-guide/target-data.html#oracle-output).
+output](https://docs.hubverse.io/en/latest/user-guide/target-data.html#oracle-output).
 
 The image is built and deployed to the GitHub Container Registry (https://ghcr.io).
 You can find the [latest version of the
