@@ -1,59 +1,161 @@
-name: Create and publish a Docker image
+name: Create, Test, and Publish Docker Image
 
 on:
+  pull_request:
+    branches: [main]
   push:
+    branches: [main]
+    paths:
+      - scripts/create-predevals-data.R
+      - Dockerfile
+      - renv.lock
+      - renv/
+      - .Rprofile
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      publish:
+        required: true
+        type: boolean
+        default: false
 
-# Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish) }}
 
-# There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
 jobs:
-  build-and-push-image:
+  build-image:
+    permissions: read-all
     runs-on: ubuntu-latest
-    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      test-tag: ${{ steps.name-artifact.outputs.tag }}
+    steps:
+      - id: checkout
+        name: Checkout
+        uses: actions/checkout@v4
+      - id: setup-buildx
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 #v3.10.0 
+      - id: container-login
+        if: ${{ env.PUBLISH }}
+        name: Log in to the Container registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 #v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        name: Extract metadata (tags, labels) for Docker
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 #v5.7.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=ref,event=pr
+            type=ref,event=branch
+      - id: name-artifact
+        env:
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.meta.outputs.tags }}
+          LABEL: ${{ steps.meta.outputs.labels }}
+        run: |
+          echo $TAG
+          echo $LABEL
+          # This allows us to parse the case when there are multiple tags. 
+          tag=$(echo $TAG | sed -e "s+[^:]*[:]\([^ ]*\).*+\1+")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=tag-$tag" >> "$GITHUB_OUTPUT"
+        shell: bash {0}
+      - id: build
+        name: Build and export
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 #v6.16.0
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          outputs: type=docker,dest=/tmp/hubpredevalsdata-docker.tar
+      - id: test
+        name: Test image
+        env:
+          TAG: ${{ steps.name-artifact.outputs.tag }}
+        run: |
+          docker load --input /tmp/hubpredevalsdata-docker.tar
+          docker run --rm -it "ghcr.io/hubverse-org/hub-dash-site-builder:${TAG}" create-predevals-data.R --help
+      - id: upload
+        name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          retention-days: 1
+          name: ${{ steps.name-artifact.outputs.name }}
+          path: /tmp/hubpredevalsdata-docker.tar
+
+  test:
+    needs: [build-image]
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main') }}
+    name: "Test built image against published test suite (may fail)"
+    runs-on: ubuntu-latest
+    permissions: read-all
+    steps:
+      - id: check-artifacts
+        name: Fetch image
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: tag*
+      - id: test-image
+        name: Test image against tests on main
+        env:
+          TAG: ${{ needs.build-image.outputs.test-tag }}
+        run: |
+          path=$(ls artifacts/*/*)
+          docker load --input "$path"
+          docker run --rm -it "ghcr.io/hubverse-org/hub-dash-site-builder:${TAG}" create-predevals-data.R --help
+        shell: bash
+  publish:
+    needs: [build-image]
+    name: "Publish Image"
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish) }}
     permissions:
       contents: read
       packages: write
       attestations: write
       id-token: write
-      # 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
-      - name: Log in to the Container registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+      - id: check-artifacts
+        name: Fetch Image
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: tag*
+      - id: container-login
+        name: Log in to the Container registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 #v3.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about) to extract tags and labels that will be applied to the specified image. The `id` "meta" allows the output of this step to be referenced in a subsequent step. The `images` value provides the base name for the tags and labels.
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+      - id: load-image
+        run: |
+          path=$(ls artifacts/*/*)
+          docker load --input "$path"
+        shell: bash
+      - id: push
+        name: Build and Publish
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 #v6.16.0
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-      # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
-      # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
-      # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
-      - name: Build and push Docker image
-        id: push
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-      
-      # This step generates an artifact attestation for the image, which is an unforgeable statement about where and how it was built. It increases supply chain security for people who consume the image. For more information, see "[AUTOTITLE](/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)." 
+          tags: ${{ needs.build-image.outputs.tags }}
+          push: ${{ fromJSON(env.PUBLISH) }}
+          labels: ${{ needs.build-image.outputs.labels }}
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
           subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-      
+          push-to-registry: ${{ fromJSON(env.PUBLISH) }}
+
 
