@@ -84,7 +84,7 @@ jobs:
           TAG: ${{ steps.name-artifact.outputs.tag }}
         run: |
           docker load --input /tmp/hubpredevalsdata-docker.tar
-          docker run --rm -i "ghcr.io/hubverse-org/hub-dash-site-builder:${TAG}" create-predevals-data.R --help
+          docker run --rm -i "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" create-predevals-data.R --help
       - id: upload
         name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -113,7 +113,7 @@ jobs:
         run: |
           path=$(ls artifacts/*/*)
           docker load --input "$path"
-          docker run --rm -i "ghcr.io/hubverse-org/hub-dash-site-builder:${TAG}" create-predevals-data.R --help
+          docker run --rm -i "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" create-predevals-data.R --help
         shell: bash
   publish:
     needs: [build-image]
