@@ -9,13 +9,13 @@ output](https://docs.hubverse.io/en/latest/user-guide/target-data.html#oracle-ou
 
 The image is built and deployed to the GitHub Container Registry (https://ghcr.io).
 You can find the [latest version of the
-image](https://github.com/hubverse-org/hubPredEvalsData-docker/pkgs/container/hubpredevalsdata-docker/340871974?tag=main)
-by using the `main` tag:
+image](https://github.com/hubverse-org/hubPredEvalsData-docker/pkgs/container/hubpredevalsdata-docker/340871974?tag=latest)
+by using the `latest` tag:
 
 From the command line:
 
 ```sh
-docker pull ghcr.io/hubverse-org/hubpredevalsdata-docker:main
+docker pull ghcr.io/hubverse-org/hubpredevalsdata-docker:latest
 ```
 
 ## Usage
@@ -29,7 +29,7 @@ help documentation if you pass `--help` to it.
 
 ```sh
 docker run --rm -it \
-ghcr.io/hubverse-org/hubpredevalsdata-docker:main \
+ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
 create-predevals-data.R --help
 ```
 
@@ -75,7 +75,7 @@ cfg=https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/ma
 
 # run the container
 docker run --rm -it --platform=linux/amd64 -v "$(pwd)":"/project" \
-ghcr.io/hubverse-org/hubpredevalsdata-docker:main \
+ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
 create-predevals-data.R -h /project -c $cfg -d /project/target-data/oracle-output.csv -o /project/predevals/data
 ```
 
