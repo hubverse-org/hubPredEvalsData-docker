@@ -87,6 +87,7 @@ jobs:
           # versions of the image. There is a script called test.R that will
           # compare them. 
           # SETUP -------------------------------------------------------------
+          mkdir -p testing && cd testing
           git clone https://github.com/reichlab/flu-metrocast.git
           curl -sSL -o predevals-config.yml https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/main/predevals-config.yml
           mkdir -p latest
