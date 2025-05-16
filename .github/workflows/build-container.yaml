@@ -83,8 +83,45 @@ jobs:
         env:
           TAG: ${{ steps.name-artifact.outputs.tag }}
         run: |
+          # Testing strategy here: test the same data built with the two 
+          # versions of the image. There is a script called test.R that will
+          # compare them. 
+          # SETUP -------------------------------------------------------------
+          echo "::group::Setup: cloning test repo and pulling images"
+          mkdir -p testing && cd testing
+          git clone https://github.com/reichlab/flu-metrocast.git
+          curl -sSL -o predevals-config.yml https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/main/predevals-config.yml
+          mkdir -p latest
+          mkdir -p new
+          docker pull ghcr.io/hubverse-org/hubpredevalsdata-docker:latest
           docker load --input /tmp/hubpredevalsdata-docker.tar
-          docker run --rm -i "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" create-predevals-data.R --help
+          echo "::endgroup::"
+          echo "::group::[latest] Generating data with the latest image"
+          # GENERATE LATEST ---------------------------------------------------
+          docker run --rm -i -v "$(pwd)":"/project" \
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:latest" \
+            create-predevals-data.R \
+            -h flu-metrocast \
+            -d flu-metrocast/target-data/oracle-output.csv \
+            -c predevals-config.yml \
+            -o latest
+          echo "::endgroup::"
+          # GENERATE PR -------------------------------------------------------
+          echo "::group::[${TAG}] Generating data with the ${TAG} image"
+          docker run --rm -i -v "$(pwd)":"/project" \
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" \
+            create-predevals-data.R \
+            -h flu-metrocast \
+            -d flu-metrocast/target-data/oracle-output.csv \
+            -c predevals-config.yml \
+            -o new
+          echo "::endgroup::"
+          # COMPARE OUTPUTS ---------------------------------------------------
+          echo "::group::[validation] comparing output data sets"
+          docker run --rm -i -v "$(pwd)":"/project" \
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" \
+            test.R latest new
+          echo "::endgroup::"
       - id: upload
         name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -112,8 +149,43 @@ jobs:
           TAG: ${{ needs.build-image.outputs.test-tag }}
         run: |
           path=$(ls artifacts/*/*)
+          # Testing strategy here: test the same data built with the two 
+          # versions of the image. There is a script called test.R that will
+          # compare them. 
+          echo "::group::Setup: cloning test repo and pulling images"
+          git clone https://github.com/reichlab/flu-metrocast.git
+          curl -sSL -o predevals-config.yml https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/main/predevals-config.yml
+          mkdir -p latest
+          mkdir -p new
+          docker pull ghcr.io/hubverse-org/hubpredevalsdata-docker:latest
           docker load --input "$path"
-          docker run --rm -i "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" create-predevals-data.R --help
+          echo "::endgroup::"
+          echo "::group::[latest] Generating data with the latest image"
+          # GENERATE LATEST ---------------------------------------------------
+          docker run --rm -i -v "$(pwd)":"/project" \
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:latest" \
+            create-predevals-data.R \
+            -h flu-metrocast \
+            -d flu-metrocast/target-data/oracle-output.csv \
+            -c predevals-config.yml \
+            -o latest
+          echo "::endgroup::"
+          # GENERATE PR -------------------------------------------------------
+          echo "::group::[${TAG}] Generating data with the ${TAG} image"
+          docker run --rm -i -v "$(pwd)":"/project" \
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" \
+            create-predevals-data.R \
+            -h flu-metrocast \
+            -d flu-metrocast/target-data/oracle-output.csv \
+            -c predevals-config.yml \
+            -o new
+          echo "::endgroup::"
+          # COMPARE OUTPUTS ---------------------------------------------------
+          echo "::group::[validation] comparing output data sets"
+          docker run --rm -i -v "$(pwd)":"/project" \
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:latest" \
+            test.R latest new
+          echo "::endgroup::"
         shell: bash
   publish:
     needs: [build-image]
