@@ -183,7 +183,7 @@ jobs:
           # COMPARE OUTPUTS ---------------------------------------------------
           echo "::group::[validation] comparing output data sets"
           docker run --rm -i -v "$(pwd)":"/project" \
-            "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" \
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:latest" \
             test.R latest new
           echo "::endgroup::"
         shell: bash
