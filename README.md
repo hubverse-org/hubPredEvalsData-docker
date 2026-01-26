@@ -94,3 +94,36 @@ and you will need to commit it. Once you commit and push, the docker image will
 be rebuilt.
 
 
+### 2026-01-26 update re: refreshing `renv.lock`
+
+Without the guidance of previous contributors, we discovered that the following process worked for creating an updated `renv.lock`. We verified via GenAI that this approach is sane, esp. that it is essential to use `snapshot.type('all')`.
+
+```bash
+# start R in the currently deployed container
+docker run -it --rm ghcr.io/hubverse-org/hubpredevalsdata-docker:latest R
+```
+
+```R
+# update the two recommended packages
+renv::update(packages = c("hubPredEvalsData", "scoringutils"))
+
+# specify the 'all' renv setting
+renv::settings$snapshot.type('all')
+
+# take the snapshot
+renv::snapshot()
+
+# now use Docker to copy `/project/renv.lock` out of the container using the Docker UI
+```
+
+Note: GenAI suggested: "Your `scripts/update.R` script could work if you mount it into the container:"
+
+```bash
+docker run -it --rm \                              
+  -v $(pwd)/renv.lock:/project/renv.lock \         
+  -v $(pwd)/scripts/update.R:/project/update.R \   
+  ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \                                                          
+  Rscript -e "renv::settings\$snapshot.type('all'); source('update.R')"
+```
+
+"This would let you run the update script directly and have the `renv.lock` written back to your host."              
