@@ -82,15 +82,39 @@ create-predevals-data.R -h /project -c $cfg -d /project/target-data/oracle-outpu
 ## Updating
 
 Because hubPredEvalsData is constantly improving, this image needs to be
-rebuilt with the updated version. This can be achieved by running the update
-script:
+rebuilt with the updated version.
 
+### Dependency management
+
+This project uses `renv` with the `explicit` snapshot type. Dependencies are
+declared in the `DESCRIPTION` file, which ensures reproducible and predictable
+lockfile generation. This approach:
+
+- Captures only the packages actually needed (declared in `DESCRIPTION`)
+- Avoids including unrelated packages from the base R image
+- Is the standard R approach for dependency management
+
+> [!NOTE]
+> If you add a new dependency to any script in this project, you must also add
+> it to the `DESCRIPTION` file's `Imports` field for it to be captured in the
+> lockfile.
+
+### How to update
+
+The update script must be run inside the Docker container. From the root of
+this repository:
+
+```bash
+docker run --rm -it --platform=linux/amd64 \
+  -v "$(pwd)/renv.lock":/project/renv.lock \
+  -v "$(pwd)/scripts/update.R":/project/scripts/update.R \
+  -v "$(pwd)/DESCRIPTION":/project/DESCRIPTION \
+  ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
+  Rscript scripts/update.R
 ```
-./scripts/update.R
-```
 
-When the update is complete, if there are updates, then the lockfile will change
-and you will need to commit it. Once you commit and push, the docker image will
-be rebuilt.
+This mounts the local `renv.lock`, `DESCRIPTION`, and update script into the
+container, runs the update, and writes the updated lockfile back to your host.
 
-
+If there are updates, the lockfile will change and you will need to commit it.
+Once you commit and push, the docker image will be rebuilt automatically.              
