@@ -1548,7 +1548,7 @@
     },
     "hubPredEvalsData": {
       "Package": "hubPredEvalsData",
-      "Version": "0.0.0.9000",
+      "Version": "1.0.0",
       "Source": "GitHub",
       "Title": "Data Creation for Hub Prediction Evaluations via predevals",
       "Authors@R": "c( person(\"Evan\", \"Ray\", , \"elray@umass.edu\", role = c(\"aut\", \"cre\")) )",
@@ -1569,7 +1569,7 @@
       ],
       "Encoding": "UTF-8",
       "Roxygen": "list(markdown = TRUE)",
-      "RoxygenNote": "7.3.2",
+      "RoxygenNote": "7.3.3",
       "Suggests": [
         "testthat (>= 3.0.0)",
         "withr"
@@ -1584,7 +1584,7 @@
       "RemoteUsername": "hubverse-org",
       "RemoteRepo": "hubPredEvalsData",
       "RemoteRef": "main",
-      "RemoteSha": "c16b56349457e96f21b0c5d6856a3685d7d48294",
+      "RemoteSha": "76c08213a917f8582b613588bba8f315cbc2bdf7",
       "RemoteHost": "api.github.com",
       "Remotes": "hubverse-org/hubData, hubverse-org/hubEvals, hubverse-org/hubUtils, epiforecasts/scoringutils"
     },
