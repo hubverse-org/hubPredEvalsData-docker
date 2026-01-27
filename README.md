@@ -82,48 +82,39 @@ create-predevals-data.R -h /project -c $cfg -d /project/target-data/oracle-outpu
 ## Updating
 
 Because hubPredEvalsData is constantly improving, this image needs to be
-rebuilt with the updated version. This can be achieved by running the update
-script:
+rebuilt with the updated version.
 
-```
-./scripts/update.R
-```
+### Dependency management
 
-When the update is complete, if there are updates, then the lockfile will change
-and you will need to commit it. Once you commit and push, the docker image will
-be rebuilt.
+This project uses `renv` with the `explicit` snapshot type. Dependencies are
+declared in the `DESCRIPTION` file, which ensures reproducible and predictable
+lockfile generation. This approach:
 
+- Captures only the packages actually needed (declared in `DESCRIPTION`)
+- Avoids including unrelated packages from the base R image
+- Is the standard R approach for dependency management
 
-### 2026-01-26 update re: refreshing `renv.lock`
+> [!NOTE]
+> If you add a new dependency to any script in this project, you must also add
+> it to the `DESCRIPTION` file's `Imports` field for it to be captured in the
+> lockfile.
 
-Without the guidance of previous contributors, we discovered that the following process worked for creating an updated `renv.lock`. We verified via GenAI that this approach is sane, esp. that it is essential to use `snapshot.type('all')`.
+### How to update
 
-```bash
-# start R in the currently deployed container
-docker run -it --rm ghcr.io/hubverse-org/hubpredevalsdata-docker:latest R
-```
-
-```R
-# update the two recommended packages
-renv::update(packages = c("hubPredEvalsData", "scoringutils"))
-
-# specify the 'all' renv setting
-renv::settings$snapshot.type('all')
-
-# take the snapshot
-renv::snapshot()
-
-# now use Docker to copy `/project/renv.lock` out of the container using the Docker UI
-```
-
-Note: GenAI suggested: "Your `scripts/update.R` script could work if you mount it into the container:"
+The update script must be run inside the Docker container. From the root of
+this repository:
 
 ```bash
-docker run -it --rm \                              
-  -v $(pwd)/renv.lock:/project/renv.lock \         
-  -v $(pwd)/scripts/update.R:/project/update.R \   
-  ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \                                                          
-  Rscript -e "renv::settings\$snapshot.type('all'); source('update.R')"
+docker run --rm -it --platform=linux/amd64 \
+  -v "$(pwd)/renv.lock":/project/renv.lock \
+  -v "$(pwd)/scripts/update.R":/project/scripts/update.R \
+  -v "$(pwd)/DESCRIPTION":/project/DESCRIPTION \
+  ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
+  Rscript scripts/update.R
 ```
 
-"This would let you run the update script directly and have the `renv.lock` written back to your host."              
+This mounts the local `renv.lock`, `DESCRIPTION`, and update script into the
+container, runs the update, and writes the updated lockfile back to your host.
+
+If there are updates, the lockfile will change and you will need to commit it.
+Once you commit and push, the docker image will be rebuilt automatically.              
