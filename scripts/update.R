@@ -1,6 +1,10 @@
 #!/usr/bin/env Rscript
 
-renv::restore()
-renv::settings$snapshot.type("explicit")
-renv::update(packages = c("hubPredEvalsData", "scoringutils"))
-renv::snapshot()
+options(
+  repos = c(
+    hubverse = "https://hubverse-org.r-universe.dev",
+    getOption("repos")
+  ),
+  renv.config.install.remotes = FALSE
+)
+renv::install(lock = TRUE)

@@ -11,9 +11,4 @@ Imports:
     yaml,
     purrr,
     jsonlite
-Remotes:
-    hubverse-org/hubPredEvalsData,
-    hubverse-org/hubData,
-    hubverse-org/hubUtils,
-    hubverse-org/hubEvals,
-    epiforecasts/scoringutils
+
