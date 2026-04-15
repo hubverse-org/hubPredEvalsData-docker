@@ -79,12 +79,7 @@ ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
 create-predevals-data.R -h /project -c $cfg -d /project/target-data/oracle-output.csv -o /project/predevals/data
 ```
 
-## Updating
-
-Because hubPredEvalsData is constantly improving, this image needs to be
-rebuilt with the updated version.
-
-### Dependency management
+## Dependency management
 
 This project uses `renv` with the `explicit` snapshot type. Dependencies are
 declared in the `DESCRIPTION` file, which ensures reproducible and predictable
@@ -99,22 +94,103 @@ lockfile generation. This approach:
 > it to the `DESCRIPTION` file's `Imports` field for it to be captured in the
 > lockfile.
 
-### How to update
+## Dev Docker images
 
-The update script must be run inside the Docker container. From the root of
-this repository:
+Two additional Dockerfiles in `docker/` support local development and
+`renv.lock` updates. They provide a container with an empty R package library,
+which is required for resolving packages from r-universe instead of GitHub
+(see [#16](https://github.com/hubverse-org/hubPredEvalsData-docker/issues/16)
+for details).
+
+- **`docker/base.Dockerfile`** — system dependencies + R + renv. No R
+  packages installed. This is the reusable foundation.
+- **`docker/dev.Dockerfile`** — builds on the base image, adds project files
+  (DESCRIPTION, .Rprofile, renv/activate.R, scripts). Still no R packages
+  installed — they are installed at runtime so they always resolve fresh from
+  r-universe/CRAN.
+
+### Building the dev images
 
 ```bash
-docker run --rm -it --platform=linux/amd64 \
-  -v "$(pwd)/renv.lock":/project/renv.lock \
-  -v "$(pwd)/scripts/update.R":/project/scripts/update.R \
-  -v "$(pwd)/DESCRIPTION":/project/DESCRIPTION \
-  ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
-  Rscript scripts/update.R
+# Build base (cached, rarely needs rebuilding)
+docker build --platform linux/amd64 -f docker/base.Dockerfile -t hubpredevalsdata-base .
+
+# Build dev image
+docker build --platform linux/amd64 -f docker/dev.Dockerfile -t hubpredevalsdata-dev .
 ```
 
-This mounts the local `renv.lock`, `DESCRIPTION`, and update script into the
-container, runs the update, and writes the updated lockfile back to your host.
+> [!NOTE]
+> Use `--platform linux/amd64` even on Apple Silicon Macs. This ensures
+> pre-built CRAN binaries are available (the rocker base image uses Posit
+> Package Manager which serves binaries for x86_64 Linux). Without it,
+> all packages compile from source (~24 min vs ~2 min).
+
+### Updating `renv.lock`
+
+Mount the project directory into the dev container and run `update.R`. This
+is the **only** workflow that modifies the host lockfile:
+
+```bash
+docker run --rm --platform linux/amd64 \
+  -v "$(pwd)":/project -w /project \
+  hubpredevalsdata-dev Rscript scripts/update.R
+```
 
 If there are updates, the lockfile will change and you will need to commit it.
-Once you commit and push, the docker image will be rebuilt automatically.              
+Once you commit and push, the docker image will be rebuilt automatically.
+
+<!-- TODO: document automated CI workflow for renv.lock updates (#18) -->
+
+### Ephemeral dev testing
+
+Use a named container for persistent testing sessions. Packages are installed
+at runtime from r-universe/CRAN (~2 min), then dev packages can be layered on.
+Nothing is written back to the host.
+
+```bash
+# Start a persistent dev container
+docker run -d --platform linux/amd64 --name dev-test hubpredevalsdata-dev sleep infinity
+
+# Install released packages from r-universe/CRAN (~2 min)
+docker exec dev-test Rscript scripts/update.R
+```
+
+#### Installing dev package versions
+
+Layer a dev version on top of the released packages.
+
+From a GitHub branch or PR:
+
+```bash
+docker exec dev-test Rscript -e \
+  'renv::install("hubverse-org/hubEvals@feature-branch", lock = TRUE)'
+
+# Or from a GitHub PR (by number)
+docker exec dev-test Rscript -e \
+  'renv::install("hubverse-org/hubPredEvalsData#42", lock = TRUE)'
+```
+
+From a local checkout (mount it when starting the container):
+
+```bash
+# Start the container with a local package mounted
+docker run -d --platform linux/amd64 --name dev-test \
+  -v /path/to/local/hubEvals:/dev/hubEvals \
+  hubpredevalsdata-dev sleep infinity
+
+# Install released packages, then overlay the local dev version
+docker exec dev-test Rscript scripts/update.R
+docker exec dev-test Rscript -e 'renv::install("/dev/hubEvals", lock = TRUE)'
+```
+
+#### Running the pipeline and cleaning up
+
+```bash
+# Run the pipeline as many times as needed
+docker exec dev-test Rscript scripts/create-predevals-data.R [args...]
+
+# Clean up when done
+docker stop dev-test && docker rm dev-test
+```
+
+
