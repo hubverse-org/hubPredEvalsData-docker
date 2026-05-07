@@ -3,6 +3,12 @@ name: Create, Test, and Publish Docker Image
 on:
   pull_request:
     branches: [main]
+    paths:
+      - scripts/create-predevals-data.R
+      - Dockerfile
+      - renv.lock
+      - renv/
+      - .Rprofile
   push:
     branches: [main]
     paths:
