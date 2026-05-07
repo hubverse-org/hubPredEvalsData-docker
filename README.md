@@ -94,7 +94,7 @@ lockfile generation. This approach:
 > it to the `DESCRIPTION` file's `Imports` field for it to be captured in the
 > lockfile.
 
-## Dev Docker images
+## Base and dev Docker images
 
 Two additional Dockerfiles in `docker/` support local development and
 `renv.lock` updates. They provide a container with an empty R package library,
@@ -103,13 +103,15 @@ which is required for resolving packages from r-universe instead of GitHub
 for details).
 
 - **`docker/base.Dockerfile`** — system dependencies + R + renv. No R
-  packages installed. This is the reusable foundation.
+  packages installed. A reusable foundation intended to also back the
+  production image in future (see
+  [#19](https://github.com/hubverse-org/hubPredEvalsData-docker/issues/19)).
 - **`docker/dev.Dockerfile`** — builds on the base image, adds project files
   (DESCRIPTION, .Rprofile, renv/activate.R, scripts). Still no R packages
   installed — they are installed at runtime so they always resolve fresh from
   r-universe/CRAN.
 
-### Building the dev images
+### Building the images
 
 ```bash
 # Build base (cached, rarely needs rebuilding)
