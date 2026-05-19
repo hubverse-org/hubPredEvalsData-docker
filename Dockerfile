@@ -1,4 +1,8 @@
-FROM rocker/r-ver:4
+# Pinned to 4.5.2 as a tactical unblock for #24: rocker/r-ver:4 floated to
+# R 4.6.0 on 2026-04-24, and the pinned source packages in renv.lock don't
+# compile against R 4.6. Proper fix (PPM binaries + refreshed lockfile) is
+# tracked in #24; revisit this pin then.
+FROM rocker/r-ver:4.5.2
 
 LABEL org.opencontainers.image.description="A thin wrapper around hubPredEvalsData"
 LABEL org.opencontainers.image.licenses="MIT"
