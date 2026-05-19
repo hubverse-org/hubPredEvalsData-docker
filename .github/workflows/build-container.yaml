@@ -5,18 +5,24 @@ on:
     branches: [main]
     paths:
       - scripts/create-predevals-data.R
+      - scripts/test.R
+      - tests/testthat/test-predevals-output.R
       - Dockerfile
       - renv.lock
       - renv/
       - .Rprofile
+      - .github/workflows/build-container.yaml
   push:
     branches: [main]
     paths:
       - scripts/create-predevals-data.R
+      - scripts/test.R
+      - tests/testthat/test-predevals-output.R
       - Dockerfile
       - renv.lock
       - renv/
       - .Rprofile
+      - .github/workflows/build-container.yaml
     tags:
       - 'v*'
   workflow_dispatch:
@@ -95,7 +101,7 @@ jobs:
   test:
     needs: [build-image]
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main') }}
-    name: "Test built image against published test suite (may fail)"
+    name: "Test predevals output produced by built image"
     runs-on: ubuntu-latest
     permissions: read-all
     steps:
@@ -105,48 +111,37 @@ jobs:
         with:
           path: artifacts
           pattern: tag*
-      - id: test-image
-        name: Test image against tests on main
+      - id: validate
+        name: Generate predevals output from test hub and run testthat tests
         env:
           TAG: ${{ needs.build-image.outputs.test-tag }}
+        # Strategy: drive the pipeline with the dashboard-test-hub fixture
+        # and a live predevals-config from dashboard-test-hub-dashboard, then
+        # run the testthat assertions in tests/testthat/. Schema validation
+        # of the input config happens inside generate_eval_data(), so a
+        # misconfigured config fails the pipeline step before we reach test.R.
         run: |
           path=$(ls artifacts/*/*)
-          # Testing strategy here: test the same data built with the two 
-          # versions of the image. There is a script called test.R that will
-          # compare them. 
-          echo "::group::Setup: cloning test repo and pulling images"
-          git clone https://github.com/reichlab/flu-metrocast.git
-          curl -sSL -o predevals-config.yml https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/main/predevals-config.yml
-          mkdir -p latest
-          mkdir -p new
-          docker pull ghcr.io/hubverse-org/hubpredevalsdata-docker:latest
+          echo "::group::Setup: clone test hub, fetch predevals-config, load image"
+          git clone https://github.com/hubverse-org/dashboard-test-hub.git
+          curl -sSL -o predevals-config.yml \
+            https://raw.githubusercontent.com/hubverse-org/dashboard-test-hub-dashboard/main/predevals-config.yml
+          mkdir -p out
           docker load --input "$path"
           echo "::endgroup::"
-          echo "::group::[latest] Generating data with the latest image"
-          # GENERATE LATEST ---------------------------------------------------
-          docker run --rm -i -v "$(pwd)":"/project" \
-            "ghcr.io/hubverse-org/hubpredevalsdata-docker:latest" \
-            create-predevals-data.R \
-            -h flu-metrocast \
-            -d flu-metrocast/target-data/oracle-output.csv \
-            -c predevals-config.yml \
-            -o latest
-          echo "::endgroup::"
-          # GENERATE PR -------------------------------------------------------
-          echo "::group::[${TAG}] Generating data with the ${TAG} image"
+          echo "::group::[${TAG}] Generate predevals data against dashboard-test-hub"
           docker run --rm -i -v "$(pwd)":"/project" \
             "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" \
             create-predevals-data.R \
-            -h flu-metrocast \
-            -d flu-metrocast/target-data/oracle-output.csv \
+            -h dashboard-test-hub \
+            -d dashboard-test-hub/target-data/oracle-output.csv \
             -c predevals-config.yml \
-            -o new
+            -o out
           echo "::endgroup::"
-          # COMPARE OUTPUTS ---------------------------------------------------
-          echo "::group::[validation] comparing output data sets"
+          echo "::group::[${TAG}] Run testthat tests on predevals output"
           docker run --rm -i -v "$(pwd)":"/project" \
-            "ghcr.io/hubverse-org/hubpredevalsdata-docker:latest" \
-            test.R latest new
+            "ghcr.io/hubverse-org/hubpredevalsdata-docker:${TAG}" \
+            test.R -o out
           echo "::endgroup::"
         shell: bash
   publish:

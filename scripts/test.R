@@ -1,31 +1,35 @@
 #!/usr/bin/env Rscript
+# Run the predevals-output tests via testthat.
+#
+# Thin wrapper around testthat::test_file(), same pattern as r-lib/actions's
+# check-r-package step. The actual assertions live in
+# tests/testthat/test-predevals-output.R.
+#
+# USAGE
+#   test.R -o <output_dir>
+#
+# ARGUMENTS
+#   -o <output_dir>   directory containing predevals-options.json and scores/
+
+suppressPackageStartupMessages(library(testthat))
+
 args <- commandArgs(TRUE)
-
-load_data <- function(dir) {
-  fs::dir_ls(dir, recurse = TRUE, glob = "*csv") |>
-    purrr::map(readr::read_csv, show_col_types = FALSE, progress = FALSE)
-}
-expect_df_equal_up_to_order <- function(df_act, df_exp, ignore_attr = FALSE, ...) {
-  cols <- colnames(df_act)
-  all.equal(
-    dplyr::arrange(df_act, dplyr::across(dplyr::all_of(cols))),
-    dplyr::arrange(df_exp, dplyr::across(dplyr::all_of(cols))),
-    ignore.attr = ignore_attr,
-    ...
-  ) |> isTRUE()
+parse_args <- function(args, flag) {
+  i <- which(args == flag)
+  if (length(i) == 0L) NA_character_ else args[i + 1L]
 }
 
-latest <- load_data(args[1])
-new    <- load_data(args[2])
+out_dir <- parse_args(args, "-o")
+if (is.na(out_dir)) stop("missing required -o <output_dir>", call. = FALSE)
 
-results <- purrr::map2_lgl(latest, new, expect_df_equal_up_to_order)
+# Pass the output dir to the test file via env var. testthat::test_file()
+# runs in its own environment so this is the simplest cross-scope handoff.
+Sys.setenv(PREDEVALS_OUT_DIR = out_dir)
 
-if (!all(results)) {
-  cat("These are not identical\n")
-  cat(sprintf("\n- %s", names(results[!results])))
-  stop("\nSome results failed")
-}
-
-cat("All identical\n")
-
-
+# stop_on_failure = TRUE makes test_file() throw if any test failed, which
+# exits the script non-zero. Same exit-code behaviour as `Rscript -e
+# 'testthat::test_dir(...)'` in a standard R package CI.
+testthat::test_file(
+  "/usr/local/bin/test-predevals-output.R",
+  stop_on_failure = TRUE
+)

@@ -50,4 +50,5 @@ RUN curl -ssL -o - https://github.com/mikefarah/yq/releases/download/${YQ_VERSIO
 
 COPY scripts/create-predevals-data.R /usr/local/bin
 COPY scripts/test.R /usr/local/bin
+COPY tests/testthat/test-predevals-output.R /usr/local/bin
 RUN chmod u+x /usr/local/bin/create-predevals-data.R /usr/local/bin/test.R
