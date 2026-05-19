@@ -24,7 +24,9 @@ if (is.na(out_dir)) stop("missing required -o <output_dir>", call. = FALSE)
 
 # Pass the output dir to the test file via env var. testthat::test_file()
 # runs in its own environment so this is the simplest cross-scope handoff.
-Sys.setenv(PREDEVALS_OUT_DIR = out_dir)
+# Resolve to an absolute path first: test_file() changes the working
+# directory to the test file's directory, so a relative path would break.
+Sys.setenv(PREDEVALS_OUT_DIR = normalizePath(out_dir, mustWork = TRUE))
 
 # stop_on_failure = TRUE makes test_file() throw if any test failed, which
 # exits the script non-zero. Same exit-code behaviour as `Rscript -e
