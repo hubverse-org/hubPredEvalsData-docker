@@ -1,12 +1,11 @@
-# Pinned to 4.5.2 as a tactical unblock for #24: rocker/r-ver:4 floated to
-# R 4.6.0 on 2026-04-24, and the pinned source packages in renv.lock don't
-# compile against R 4.6. Proper fix (PPM binaries + refreshed lockfile) is
-# tracked in #24; revisit this pin then.
-FROM rocker/r-ver:4.5.2
+# Pin to the R 4.5 minor tag: patch releases are ABI-stable, so this picks up
+# fixes safely while minor/major R bumps stay deliberate (see #24).
+FROM rocker/r-ver:4.5
 
 LABEL org.opencontainers.image.description="A thin wrapper around hubPredEvalsData"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.authors="Zhian N. Kamvar <zkamvar@umass.edu>"
+LABEL org.opencontainers.image.authors="Hubverse"
+LABEL org.opencontainers.image.source="https://github.com/hubverse-org/hubPredEvalsData-docker"
 
 ARG YQ_VERSION="v4.44.3"
 ENV LC_ALL=en_US.UTF-8
@@ -46,6 +45,12 @@ WORKDIR /project
 ENV RENV_PATHS_LIBRARY=renv/library
 COPY renv.lock renv.lock
 RUN Rscript -e "install.packages('renv', repos = c(CRAN = 'https://cloud.r-project.org'))"
+
+# Fail the build before restoring if renv.lock was resolved against a
+# different R minor than this image: restore() only warns on a mismatch and
+# would then pull p3m binaries built for the wrong R (#24).
+RUN Rscript -e 'lk <- package_version(renv::lockfile_read("renv.lock")$R$Version); img <- getRversion(); if (lk[1, 1:2] != img[1, 1:2]) stop(sprintf("renv.lock R (%s) does not match image R (%s)", lk, img))'
+
 RUN Rscript -e "renv::restore()"
 
 # YQ is needed here because we need it inside of GitHub actions
