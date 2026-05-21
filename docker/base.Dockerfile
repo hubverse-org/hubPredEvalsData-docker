@@ -1,4 +1,5 @@
-FROM rocker/r-ver:4
+# Pin to the R 4.5 minor tag; must match the production Dockerfile (see #24).
+FROM rocker/r-ver:4.5
 
 LABEL org.opencontainers.image.description="Base R image with system deps and renv for hubverse dashboard"
 LABEL org.opencontainers.image.licenses="MIT"
