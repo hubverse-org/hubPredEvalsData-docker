@@ -10,5 +10,6 @@ Imports:
     fs,
     yaml,
     purrr,
-    jsonlite
+    jsonlite,
+    testthat
 

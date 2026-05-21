@@ -1,0 +1,111 @@
+# Tests for the predevals output produced by the docker pipeline.
+#
+# Driven by scripts/test.R, which sets PREDEVALS_OUT_DIR before calling
+# testthat::test_file() on this file. Asserts that the pipeline produces
+# the expected output structure when run against
+# hubverse-org/dashboard-test-hub + hubverse-org/dashboard-test-hub-dashboard.
+#
+# Changes to those fixtures may require updates to the expected_* lists below.
+#
+# Schema validation of the input config happens inside generate_eval_data()
+# in create-predevals-data.R, so a misconfigured config fails the pipeline
+# step before we reach this file; we do not re-validate it here. Anything
+# tested by hubPredEvalsData / hubEvals / scoringutils (metric columns,
+# types, value bounds) is intentionally not re-tested here either.
+
+out_dir <- Sys.getenv("PREDEVALS_OUT_DIR")
+if (!nzchar(out_dir)) {
+  stop("PREDEVALS_OUT_DIR is not set; run via scripts/test.R", call. = FALSE)
+}
+opts_path <- file.path(out_dir, "predevals-options.json")
+scores_root <- file.path(out_dir, "scores")
+
+# ---- Fixture expectations -------------------------------------------------
+# Pinned to:
+#   dashboard-test-hub @ main
+#   dashboard-test-hub-dashboard @ main
+# Update tests if a change in either repo alters the pipeline output shape.
+
+# Metrics listed in predevals-options.json per target, after the
+# create-predevals-data.R rewrite that splices `_scaled_relative_skill`
+# entries in for any metric declared in `relative_metrics`.
+expected_metrics_by_target <- list(
+  "wk inc flu hosp" = c(
+    "wis_scaled_relative_skill",
+    "wis",
+    "ae_median_scaled_relative_skill",
+    "ae_median",
+    "interval_coverage_50",
+    "interval_coverage_95"
+  ),
+  "wk inc flu death" = c(
+    "wis_scaled_relative_skill",
+    "wis",
+    "ae_median_scaled_relative_skill",
+    "ae_median",
+    "interval_coverage_50",
+    "interval_coverage_95"
+  ),
+  "wk flu hosp rate category" = c(
+    "log_score"
+  )
+)
+
+expected_targets <- names(expected_metrics_by_target)
+
+# All targets currently share the same eval set and disaggregations. If that
+# ever diverges, replace this with explicit per-target entries.
+disagg_cols <- c("location", "reference_date", "horizon", "target_end_date")
+expected_files <- do.call(c, lapply(expected_targets, function(t) {
+  c(
+    list(list(target = t, eval_set = "All rounds", by = NULL)),
+    lapply(disagg_cols, function(b) {
+      list(target = t, eval_set = "All rounds", by = b)
+    })
+  )
+}))
+
+# ---- predevals-options.json -----------------------------------------------
+
+test_that("predevals-options.json is present", {
+  expect_true(file.exists(opts_path), info = opts_path)
+})
+
+opts <- jsonlite::read_json(opts_path)
+
+test_that("predevals-options.json contains expected targets", {
+  expect_setequal(
+    purrr::map_chr(opts$targets, "target_id"),
+    expected_targets
+  )
+})
+
+for (target_id in expected_targets) {
+  test_that(sprintf("predevals-options.json metrics for '%s' match expected", target_id), {
+    # Pick the entry in opts$targets whose target_id matches.
+    target <- Filter(function(x) x$target_id == target_id, opts$targets)[[1]]
+    expect_setequal(
+      unlist(target$metrics),
+      expected_metrics_by_target[[target_id]]
+    )
+  })
+}
+
+# ---- scores.csv files -----------------------------------------------------
+
+for (fx in expected_files) {
+  rel_path <- file.path(fx$target, fx$eval_set)
+  if (!is.null(fx$by)) rel_path <- file.path(rel_path, fx$by)
+  rel_path <- file.path(rel_path, "scores.csv")
+  full_path <- file.path(scores_root, rel_path)
+
+  test_that(sprintf("[%s] exists", rel_path), {
+    expect_true(file.exists(full_path), info = full_path)
+  })
+  if (!file.exists(full_path)) next
+
+  test_that(sprintf("[%s] is non-empty", rel_path), {
+    df <- readr::read_csv(full_path, show_col_types = FALSE, progress = FALSE)
+    expect_gt(nrow(df), 0L)
+  })
+}

@@ -1,4 +1,8 @@
-FROM rocker/r-ver:4
+# Pinned to 4.5.2 as a tactical unblock for #24: rocker/r-ver:4 floated to
+# R 4.6.0 on 2026-04-24, and the pinned source packages in renv.lock don't
+# compile against R 4.6. Proper fix (PPM binaries + refreshed lockfile) is
+# tracked in #24; revisit this pin then.
+FROM rocker/r-ver:4.5.2
 
 LABEL org.opencontainers.image.description="A thin wrapper around hubPredEvalsData"
 LABEL org.opencontainers.image.licenses="MIT"
@@ -50,4 +54,5 @@ RUN curl -ssL -o - https://github.com/mikefarah/yq/releases/download/${YQ_VERSIO
 
 COPY scripts/create-predevals-data.R /usr/local/bin
 COPY scripts/test.R /usr/local/bin
+COPY tests/testthat/test-predevals-output.R /usr/local/bin
 RUN chmod u+x /usr/local/bin/create-predevals-data.R /usr/local/bin/test.R
