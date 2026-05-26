@@ -34,3 +34,5 @@ COPY scripts/create-predevals-data.R /usr/local/bin
 COPY scripts/test.R /usr/local/bin
 COPY tests/testthat/test-predevals-output.R /usr/local/bin
 RUN chmod u+x /usr/local/bin/create-predevals-data.R /usr/local/bin/test.R
+
+# (trailing newline added to force a chain-build trigger; remove if it works)
