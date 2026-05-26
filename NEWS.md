@@ -5,6 +5,12 @@
 * Production Dockerfile now builds on the shared base image. Apt/locale/renv
   layers live only in `docker/base.Dockerfile`; production and dev inherit
   them via `FROM ghcr.io/hubverse-org/hubpredevalsdata-base:<R minor>` (#19).
+* Disabled the renv autoloader at runtime in the production image via
+  `ENV RENV_CONFIG_AUTOLOADER_ENABLED=FALSE`. Production uses the system
+  library; renv is called only as a build-time installer. This makes the
+  image robust to a consumer bind-mounting a hub directory that contains
+  `.Rprofile` + `renv/activate.R`. See README "Renv approach: production vs
+  dev" for the full design note.
 * Pinned the rocker base to the R 4.5 minor tag (`rocker/r-ver:4.5`) and added
   a build-time guard that fails the build if `renv.lock`'s recorded R minor
   doesn't match the image's running R (#29).

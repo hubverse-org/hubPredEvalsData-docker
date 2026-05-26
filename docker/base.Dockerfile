@@ -38,5 +38,4 @@ RUN apt-get update \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
-ENV RENV_PATHS_LIBRARY=renv/library
 RUN Rscript -e "install.packages('renv')"

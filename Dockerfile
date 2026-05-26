@@ -7,6 +7,14 @@ LABEL org.opencontainers.image.source="https://github.com/hubverse-org/hubPredEv
 
 ARG YQ_VERSION="v4.44.3"
 
+# Disable renv autoloader at runtime: production uses the system library, not
+# a renv project library. renv is called only at build time, by `renv::restore()`
+# below, to install pinned package versions into `/usr/local/lib/R/site-library`.
+# Without this, a consumer's `-v <hub>:/project` could expose their `.Rprofile`
+# to the container and activate renv against an empty mounted renv/library.
+# See README "Renv approach: production vs dev" for the full design note.
+ENV RENV_CONFIG_AUTOLOADER_ENABLED=FALSE
+
 WORKDIR /project
 
 COPY renv.lock renv.lock

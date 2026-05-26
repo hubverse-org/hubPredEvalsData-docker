@@ -113,6 +113,40 @@ Both are published to GHCR on every push to `main` that changes the relevant
 files, tagged with the R minor (`:4.5`). Pull by the explicit R-minor tag;
 there is intentionally no `:latest`.
 
+### Renv approach: production vs dev
+
+The two images use renv differently, on purpose:
+
+**Production** uses renv only as a **build-time installer**. `renv::restore()`
+runs during `docker build` and installs the renv.lock-pinned package versions
+into R's default site library at `/usr/local/lib/R/site-library`. At runtime,
+renv is explicitly **not activated**: `ENV RENV_CONFIG_AUTOLOADER_ENABLED=FALSE`
+in the production Dockerfile tells the renv autoloader to bail out even if a
+`.Rprofile` is present in the container's working directory. This matters
+because consumers run production as `docker run -v <hub>:/project ...`, and if
+their hub happens to contain a `.Rprofile` + `renv/activate.R`, the bind mount
+would otherwise expose those files to the container, activate renv against an
+empty mounted `renv/library`, and break package loading. With the autoloader
+disabled, `.libPaths()` stays at R's defaults, the site library is searched,
+and packages are found regardless of what the consumer mounts.
+
+**Dev** uses renv the conventional way. `.Rprofile` and `renv/activate.R` are
+copied into the image, the autoloader is enabled, renv activates at R startup,
+and the project library lives at `/project/renv/library/...`. The whole point
+of dev is to be bind-mounted with the user's project (`-v $(pwd):/project`),
+so renv operating on the bind-mounted state is correct: `update.R` installs
+to the user's `renv/library` and writes the refreshed lockfile back to their
+`renv.lock` on the host. Dev users get full renv project semantics; production
+consumers get a self-contained image with no runtime renv overhead.
+
+In short:
+
+- **Production**: renv as build-time installer, system library at runtime, no activation.
+- **Dev**: full renv project, runtime-active, host-state-aware.
+
+The R-version guard (see below) ensures production's `renv.lock` and image R
+version stay coordinated regardless of which approach the image uses.
+
 ### Getting the images
 
 Pull the published images:
