@@ -1,4 +1,6 @@
-# Pin to the R 4.5 minor tag; must match the production Dockerfile (see #24).
+# Pin to the R 4.5 minor tag. R-minor bumps must update this, the FROM tags
+# in Dockerfile + dev.Dockerfile, and renv.lock together in one PR (chain-build
+# enforces consistency across the three Dockerfiles, see #24).
 FROM rocker/r-ver:4.5
 
 LABEL org.opencontainers.image.description="Base R image with system deps and renv for hubverse dashboard"

@@ -102,23 +102,36 @@ which is required for resolving packages from r-universe instead of GitHub
 (see [#16](https://github.com/hubverse-org/hubPredEvalsData-docker/issues/16)
 for details).
 
-- **`docker/base.Dockerfile`** — system dependencies + R + renv. No R
-  packages installed. A reusable foundation intended to also back the
-  production image in future (see
-  [#19](https://github.com/hubverse-org/hubPredEvalsData-docker/issues/19)).
-- **`docker/dev.Dockerfile`** — builds on the base image, adds project files
+- **`docker/base.Dockerfile`**: system dependencies + R + renv. No R packages
+  installed. The shared foundation that the production image also builds on.
+- **`docker/dev.Dockerfile`**: builds on the base image, adds project files
   (DESCRIPTION, .Rprofile, renv/activate.R, scripts). Still no R packages
-  installed — they are installed at runtime so they always resolve fresh from
+  installed: they are installed at runtime so they always resolve fresh from
   r-universe/CRAN.
 
-### Building the images
+Both are published to GHCR on every push to `main` that changes the relevant
+files, tagged with the R minor (`:4.5`). Pull by the explicit R-minor tag;
+there is intentionally no `:latest`.
+
+### Getting the images
+
+Pull the published images:
+
+```bash
+docker pull ghcr.io/hubverse-org/hubpredevalsdata-base:4.5
+docker pull ghcr.io/hubverse-org/hubpredevalsdata-dev:4.5
+```
+
+Or build them locally:
 
 ```bash
 # Build base (cached, rarely needs rebuilding)
-docker build --platform linux/amd64 -f docker/base.Dockerfile -t hubpredevalsdata-base .
+docker build --platform linux/amd64 -f docker/base.Dockerfile \
+  -t ghcr.io/hubverse-org/hubpredevalsdata-base:4.5 .
 
-# Build dev image
-docker build --platform linux/amd64 -f docker/dev.Dockerfile -t hubpredevalsdata-dev .
+# Build dev image (FROMs the base image above)
+docker build --platform linux/amd64 -f docker/dev.Dockerfile \
+  -t ghcr.io/hubverse-org/hubpredevalsdata-dev:4.5 .
 ```
 
 > [!NOTE]
@@ -135,13 +148,12 @@ is the **only** workflow that modifies the host lockfile:
 ```bash
 docker run --rm --platform linux/amd64 \
   -v "$(pwd)":/project -w /project \
-  hubpredevalsdata-dev Rscript scripts/update.R
+  ghcr.io/hubverse-org/hubpredevalsdata-dev:4.5 Rscript scripts/update.R
 ```
 
 If there are updates, the lockfile will change and you will need to commit it.
-Once you commit and push, the docker image will be rebuilt automatically.
-
-<!-- TODO: document automated CI workflow for renv.lock updates (#18) -->
+The PR's chain-build CI validates the new lockfile end-to-end; the production
+image picks it up on the next release (`v*` tag).
 
 ### Ephemeral dev testing
 
@@ -151,7 +163,8 @@ Nothing is written back to the host.
 
 ```bash
 # Start a persistent dev container
-docker run -d --platform linux/amd64 --name dev-test hubpredevalsdata-dev sleep infinity
+docker run -d --platform linux/amd64 --name dev-test \
+  ghcr.io/hubverse-org/hubpredevalsdata-dev:4.5 sleep infinity
 
 # Install released packages from r-universe/CRAN (~2 min)
 docker exec dev-test Rscript scripts/update.R
@@ -178,7 +191,7 @@ From a local checkout (mount it when starting the container):
 # Start the container with a local package mounted
 docker run -d --platform linux/amd64 --name dev-test \
   -v /path/to/local/hubEvals:/dev/hubEvals \
-  hubpredevalsdata-dev sleep infinity
+  ghcr.io/hubverse-org/hubpredevalsdata-dev:4.5 sleep infinity
 
 # Install released packages, then overlay the local dev version
 docker exec dev-test Rscript scripts/update.R
@@ -195,4 +208,19 @@ docker exec dev-test Rscript scripts/create-predevals-data.R [args...]
 docker stop dev-test && docker rm dev-test
 ```
 
+## CI workflows
+
+Three workflows in `.github/workflows/`, each scoped to one concern:
+
+| Workflow | Fires on | What it does | What it validates / catches |
+|---|---|---|---|
+| `chain-build.yaml` | PR touching any file that affects an image | Builds base, dev, and production locally in one runner; runs testthat against the `dashboard-test-hub` fixture using the just-built production image. | The R-minor pin in `docker/base.Dockerfile` is coordinated with the `FROM` tags in `Dockerfile` and `docker/dev.Dockerfile`; the full chain builds end-to-end; production produces correct output for a real hub config. |
+| `publish-base-dev.yaml` | Push to `main` when `docker/base.Dockerfile`, `docker/dev.Dockerfile`, or files dev embeds change | Builds and pushes `ghcr.io/hubverse-org/hubpredevalsdata-base:<R minor>` and `:<R minor>` for `dev` to GHCR. | n/a (publishing only; PR-time tests already ran via `chain-build` before merge). |
+| `publish-production.yaml` | Push of a `v*` tag (or manual `workflow_dispatch` from main with `publish=true`) | Builds production `FROM` the published base, runs testthat one more time, pushes the release tag to GHCR with build-provenance attestation. | Drift between the chain-build-tested state and the release-time environment (e.g. base has been republished since the PR merged). |
+
+**Merge vs tag lifecycle.** `base` and `dev` publish on every relevant merge to `main`, so infrastructure changes (e.g. an R-minor bump) become available immediately for dev/testing. Production publishes only on `v*` tags, so the already-released production image at the last tag is untouched on merge and continues to serve consumers until you cut a new release tag, at which point the new production image picks up whatever `base` is current. Per-release changes are tracked in [`NEWS.md`](NEWS.md).
+
+**R-version guard.** Production's `Dockerfile` has a `RUN` step before `renv::restore()` that fails the build if `renv.lock`'s recorded R minor doesn't match the image's running R. This complements the pin-coordination check in `chain-build`: the workflow check verifies the three Dockerfiles agree on a version (by inspecting their `FROM` strings); the guard verifies `renv.lock` was regenerated against that version (by inspecting the running R at build time).
+
+**No `:latest` tags.** Base, dev, and production all use explicit version tags. Pull by the version you want; there is intentionally no floating `:latest`, consistent with how `rocker/r-ver:4.5` is itself a minor pin.
 

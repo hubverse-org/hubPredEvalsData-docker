@@ -1,0 +1,120 @@
+name: Publish production image
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to GHCR (only effective on main)'
+        required: true
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish) }}
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=ref,event=branch
+
+      - name: Pick first tag for local testing
+        id: tag
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          first=$(echo "$TAGS" | head -n1)
+          echo "value=$first" >> "$GITHUB_OUTPUT"
+
+      # Load into the local docker daemon so the testthat step can `docker run`
+      # the image before we push. A second build-push step below pushes; both
+      # use the same GHA cache, so the push step is a cache hit.
+      - name: Build production (load for tests)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          cache-from: type=gha,scope=production
+          cache-to: type=gha,scope=production,mode=max
+
+      # Strategy: drive the pipeline with the dashboard-test-hub fixture and a
+      # live predevals-config from dashboard-test-hub-dashboard, then run the
+      # testthat assertions in tests/testthat/. Schema validation of the input
+      # config happens inside generate_eval_data(), so a misconfigured config
+      # fails the pipeline step before we reach test.R.
+      - name: Generate predevals data and run testthat
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          git clone https://github.com/hubverse-org/dashboard-test-hub.git
+          curl -sSL -o predevals-config.yml \
+            https://raw.githubusercontent.com/hubverse-org/dashboard-test-hub-dashboard/main/predevals-config.yml
+          mkdir -p out
+          echo "::group::Generate predevals data against dashboard-test-hub"
+          docker run --rm -v "$(pwd)":"/project" \
+            "$TAG" \
+            create-predevals-data.R \
+            -h dashboard-test-hub \
+            -d dashboard-test-hub/target-data/oracle-output.csv \
+            -c predevals-config.yml \
+            -o out
+          echo "::endgroup::"
+          echo "::group::Run testthat tests on predevals output"
+          docker run --rm -v "$(pwd)":"/project" \
+            "$TAG" \
+            test.R -o out
+          echo "::endgroup::"
+
+      - name: Build and push production
+        id: push
+        if: ${{ fromJSON(env.PUBLISH) }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+          cache-from: type=gha,scope=production
+          cache-to: type=gha,scope=production,mode=max
+
+      - name: Attest
+        if: ${{ fromJSON(env.PUBLISH) }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

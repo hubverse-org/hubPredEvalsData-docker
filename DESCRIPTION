@@ -1,6 +1,6 @@
 Package: hubPredEvalsDataDocker
 Title: Docker Wrapper for hubPredEvalsData
-Version: 0.0.1
+Version: 1.0.1.9000
 Description: Declares dependencies for the hubPredEvalsData Docker container.
     This file enables renv to use explicit snapshot type for reproducible
     dependency management.
