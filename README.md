@@ -1,11 +1,11 @@
 # Docker container for hubPredEvalsData generation
 
-This docker container is a wrapper around
-`hubPredEvalsData::generate_evals_data()` and hosts the in-development code
-from
+This docker container wraps `hubPredEvalsData::generate_eval_data()` and
+`hubPredEvalsData::generate_predevals_options()`, hosting the in-development
+code from
 [hubverse-org/hubPredEvalsData](https://github.com/hubverse-org/hubPredEvalsData),
-which is used to generate tables of evaluation data from a hub's [oracle
-output](https://docs.hubverse.io/en/latest/user-guide/target-data.html#oracle-output).
+which together generate the score tables and `predevals-options.json` the
+evals dashboard reads from a hub's [oracle output](https://docs.hubverse.io/en/latest/user-guide/target-data.html#oracle-output).
 
 The image is built and deployed to the GitHub Container Registry (https://ghcr.io).
 You can find the [latest version of the
@@ -20,9 +20,17 @@ docker pull ghcr.io/hubverse-org/hubpredevalsdata-docker:latest
 
 ## Usage
 
-The main usage for this image is a step in [the hub dashboard control
-room](https://github.com/hubverse-org/hub-dashboard-control-room) that builds
-evals data if it exists.
+This image is invoked in two contexts:
+
+- **CI**: by the [hub-dashboard-control-room](https://github.com/hubverse-org/hub-dashboard-control-room)
+  reusable workflow as part of the dashboard data pipeline. This is the
+  primary production caller; every dashboard that consumes the control-room
+  workflow picks up the `:latest` tag automatically on the next run. See the
+  hubverse docs on [dashboard operational workflows](https://docs.hubverse.io/en/latest/developer/dashboard-workflows.html)
+  for the full pipeline context.
+- **Local**: directly via `docker run` for testing, debugging, or one-off
+  generation against a local hub clone. See the [Example](#example) below
+  and the hubverse docs on the [local dashboard workflow](https://docs.hubverse.io/en/latest/developer/dashboard-local.html).
 
 The container packages the `create-predevals-data.R` script, which will display
 help documentation if you pass `--help` to it.
@@ -38,27 +46,39 @@ Calculate eval scores data and a predevals-config.json file
 
 USAGE
 
-   create-predevals-data.R [--help] -h </path/to/hub> -c <cfg> -d <oracle> [-o <dir>]
+   create-predevals-data.R [--help] -h </path/to/hub> -c <cfg> [-o <dir>] \
+     [-d <oracle>] [--legacy-oracle-fallback <url>]
 
 ARGUMENTS
 
-  --help             print help and exit
-  -h </path/to/hub>  path to a local copy of the hub
-  -c <cfg>           path or URL of predevals config file
-  -d <oracle>        path or URL to oracle output data
-  -o <dir>           output directory
+  --help                          print help and exit
+  -h </path/to/hub>               path to a local copy of the hub
+  -c <cfg>                        path or URL of predevals config file
+  -o <dir>                        output directory
+  -d <oracle>                     [DEPRECATED] path or URL to a single
+                                  oracle-output file. When supplied, used
+                                  directly and a deprecation warning is
+                                  printed. When absent, oracle output is
+                                  auto-discovered from <hub>/target-data/
+                                  via hubData (supports CSV, parquet, and
+                                  partitioned parquet per hubverse spec).
+  --legacy-oracle-fallback <url>  [TRANSITIONAL] URL to read oracle output
+                                  from if hubData auto-discovery fails.
+                                  Intended for the control-room workflow's
+                                  deprecation window. Will be removed once
+                                  dashboards are migrated.
 
 EXAMPLE
 
 ```bash
-prefix="https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads"
+prefix="https://raw.githubusercontent.com/hubverse-org/dashboard-test-hub-dashboard/refs/heads"
 cfg="${prefix}/main/predevals-config.yml"
-oracle="${prefix}/oracle-data/oracle-output.csv"
+mkdir -p evals
 
 tmp=$(mktemp -d)
-git clone https://github.com/cdcepi/FluSight-forecast-hub.git $tmp
+git clone https://github.com/hubverse-org/dashboard-test-hub.git $tmp
 
-create-predevals-data.R -h $tmp -c $cfg -d $oracle
+create-predevals-data.R -h $tmp -c $cfg -o evals
 ```
 ````
 
@@ -73,10 +93,10 @@ cd flu-metrocast
 mkdir -p predevals/data
 cfg=https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/main/predevals-config.yml
 
-# run the container
+# run the container (oracle is auto-discovered from /project/target-data/)
 docker run --rm -it --platform=linux/amd64 -v "$(pwd)":"/project" \
 ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
-create-predevals-data.R -h /project -c $cfg -d /project/target-data/oracle-output.csv -o /project/predevals/data
+create-predevals-data.R -h /project -c $cfg -o /project/predevals/data
 ```
 
 ## Dependency management

@@ -97,7 +97,6 @@ jobs:
             "${PROD_IMAGE}:${PROD_TAG}" \
             create-predevals-data.R \
             -h dashboard-test-hub \
-            -d dashboard-test-hub/target-data/oracle-output.csv \
             -c predevals-config.yml \
             -o out
           echo "::endgroup::"
