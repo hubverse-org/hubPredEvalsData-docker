@@ -37,9 +37,9 @@ jobs:
 
       # R bumps must be coordinated in one PR (base.Dockerfile rocker pin and
       # the two FROM tags must all agree), because renv.lock package versions
-      # are tied to the R minor's binary repos. The R-version guard in
-      # production catches a runtime mismatch; this fails earlier with a
-      # clearer message.
+      # are tied to the R minor's binary repos. Production's R-version guard
+      # catches a runtime mismatch as a fallback; this PR-time check catches
+      # the same problem earlier with a clearer error message.
       - name: Verify R-minor pin is coordinated across Dockerfiles
         id: rminor
         run: |
@@ -56,8 +56,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      # Tagged as ghcr.io/.../base:<rminor> so dev/prod's FROM resolves to
-      # this just-built local image (load: true exports it into the docker
+      # Tagged as ghcr.io/.../base:<rminor> so dev/prod's `FROM` resolves to
+      # this just-built local image (`load: true` exports it into the docker
       # daemon's image store, which is what `docker build` consults first).
       # GHA cache keeps the apt+renv-install layers cheap on repeat runs.
       - name: Build base (cached, loaded to local daemon)
@@ -70,10 +70,11 @@ jobs:
           cache-from: type=gha,scope=base
           cache-to: type=gha,scope=base,mode=max
 
-      # Plain `docker build` (no buildx) for dev and prod: both FROM the base
-      # we loaded into the local image store above, which the docker daemon
-      # finds without a registry round-trip. Production's R-version guard
-      # (inside Dockerfile, before renv::restore) runs as part of this build.
+      # Plain `docker build` (no buildx) for dev and prod: both Dockerfiles'
+      # `FROM` lines point at the base we loaded into the local image store
+      # above, which the docker daemon resolves without a registry round-trip.
+      # Production's R-version guard (inside Dockerfile, before renv::restore)
+      # runs as part of this build.
       - name: Build dev
         run: docker build -f docker/dev.Dockerfile -t "${DEV_IMAGE}:${{ steps.rminor.outputs.value }}" .
 

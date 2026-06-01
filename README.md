@@ -115,20 +115,29 @@ there is intentionally no `:latest`.
 
 ### Renv approach: production vs dev
 
-The two images use renv differently, on purpose:
+The base image installs no R packages, so renv doesn't come into play there.
+Production and dev, by contrast, each use renv but in deliberately different
+ways:
 
 **Production** uses renv only as a **build-time installer**. `renv::restore()`
 runs during `docker build` and installs the renv.lock-pinned package versions
 into R's default site library at `/usr/local/lib/R/site-library`. At runtime,
-renv is explicitly **not activated**: `ENV RENV_CONFIG_AUTOLOADER_ENABLED=FALSE`
-in the production Dockerfile tells the renv autoloader to bail out even if a
-`.Rprofile` is present in the container's working directory. This matters
-because consumers run production as `docker run -v <hub>:/project ...`, and if
-their hub happens to contain a `.Rprofile` + `renv/activate.R`, the bind mount
-would otherwise expose those files to the container, activate renv against an
-empty mounted `renv/library`, and break package loading. With the autoloader
-disabled, `.libPaths()` stays at R's defaults, the site library is searched,
-and packages are found regardless of what the consumer mounts.
+renv is explicitly **not activated**: the production Dockerfile sets
+`ENV RENV_CONFIG_AUTOLOADER_ENABLED=FALSE`, which tells the renv autoloader
+to skip activation even if a `.Rprofile` is present in the container's working
+directory. This matters because consumers run production as
+`docker run -v <hub>:/project ...`, and if their hub happens to contain a
+`.Rprofile` + `renv/activate.R`, the bind mount would otherwise expose those
+files to the container, activate renv against an empty mounted `renv/library`,
+and break package loading. With the autoloader disabled, `.libPaths()` stays
+at R's defaults, the site library is searched, and packages are found
+regardless of what the consumer mounts. The same safeguard also covers this
+repo's own `chain-build` CI. Chain-build does `actions/checkout` of this repo
+before `docker run -v $(pwd):/project`, which puts this repo's own `.Rprofile`
+and `renv/` at `/project` inside the container, the same renv-collision
+pattern the production safeguard exists to handle. The previous CI workflow's
+bind-mount didn't include the checkout root, which is why this failure mode
+surfaced only when chain-build was introduced.
 
 **Dev** uses renv the conventional way. `.Rprofile` and `renv/activate.R` are
 copied into the image, the autoloader is enabled, renv activates at R startup,
@@ -141,7 +150,7 @@ consumers get a self-contained image with no runtime renv overhead.
 
 In short:
 
-- **Production**: renv as build-time installer, system library at runtime, no activation.
+- **Production**: renv as build-time installer only, system library used at runtime, no renv activation.
 - **Dev**: full renv project, runtime-active, host-state-aware.
 
 The R-version guard (see below) ensures production's `renv.lock` and image R
@@ -250,7 +259,7 @@ Three workflows in `.github/workflows/`, each scoped to one concern:
 |---|---|---|---|
 | `chain-build.yaml` | PR touching any file that affects an image | Builds base, dev, and production locally in one runner; runs testthat against the `dashboard-test-hub` fixture using the just-built production image. | The R-minor pin in `docker/base.Dockerfile` is coordinated with the `FROM` tags in `Dockerfile` and `docker/dev.Dockerfile`; the full chain builds end-to-end; production produces correct output for a real hub config. |
 | `publish-base-dev.yaml` | Push to `main` when `docker/base.Dockerfile`, `docker/dev.Dockerfile`, or files dev embeds change | Builds and pushes `ghcr.io/hubverse-org/hubpredevalsdata-base:<R minor>` and `:<R minor>` for `dev` to GHCR. | n/a (publishing only; PR-time tests already ran via `chain-build` before merge). |
-| `publish-production.yaml` | Push of a `v*` tag (or manual `workflow_dispatch` from main with `publish=true`) | Builds production `FROM` the published base, runs testthat one more time, pushes the release tag to GHCR with build-provenance attestation. | Drift between the chain-build-tested state and the release-time environment (e.g. base has been republished since the PR merged). |
+| `publish-production.yaml` | Push of a `v*` tag (or manual `workflow_dispatch` from main with `publish=true`) | Builds the production image from the published base, runs testthat one more time, then pushes the release tag to GHCR with build-provenance attestation. | Drift between the chain-build-tested state and the release-time environment (e.g. base has been republished since the PR merged). |
 
 **Merge vs tag lifecycle.** `base` and `dev` publish on every relevant merge to `main`, so infrastructure changes (e.g. an R-minor bump) become available immediately for dev/testing. Production publishes only on `v*` tags, so the already-released production image at the last tag is untouched on merge and continues to serve consumers until you cut a new release tag, at which point the new production image picks up whatever `base` is current. Per-release changes are tracked in [`NEWS.md`](NEWS.md).
 

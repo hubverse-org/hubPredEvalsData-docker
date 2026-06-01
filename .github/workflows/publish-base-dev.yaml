@@ -68,7 +68,8 @@ jobs:
           subject-digest: ${{ steps.build-base.outputs.digest }}
           push-to-registry: true
 
-      # dev.Dockerfile FROMs the base we just pushed; buildx pulls it from GHCR.
+      # dev.Dockerfile's `FROM` references the base we just pushed; buildx
+      # pulls it from GHCR.
       - name: Build and push dev
         id: build-dev
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
