@@ -133,11 +133,11 @@ and break package loading. With the autoloader disabled, `.libPaths()` stays
 at R's defaults, the site library is searched, and packages are found
 regardless of what the consumer mounts. The same safeguard also covers this
 repo's own `chain-build` CI. Chain-build does `actions/checkout` of this repo
-before `docker run -v $(pwd):/project`, which puts this repo's own `.Rprofile`
-and `renv/` at `/project` inside the container, the same renv-collision
-pattern the production safeguard exists to handle. The previous CI workflow's
-bind-mount didn't include the checkout root, which is why this failure mode
-surfaced only when chain-build was introduced.
+before `docker run -v $(pwd):/project`. That puts this repo's own `.Rprofile`
+and `renv/` inside the container, which would otherwise trigger the same
+package-loading break as a consumer hub with a `.Rprofile`. The previous CI
+workflow didn't checkout-and-bind-mount in this way, so the issue only
+surfaced once chain-build was introduced.
 
 **Dev** uses renv the conventional way. `.Rprofile` and `renv/activate.R` are
 copied into the image, the autoloader is enabled, renv activates at R startup,
