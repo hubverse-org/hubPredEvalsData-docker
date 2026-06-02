@@ -1,0 +1,89 @@
+name: Publish base and dev images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker/base.Dockerfile
+      - docker/dev.Dockerfile
+      - DESCRIPTION
+      - .Rprofile
+      - renv/activate.R
+      - scripts/create-predevals-data.R
+      - scripts/test.R
+      - scripts/update.R
+      - .github/workflows/publish-base-dev.yaml
+  workflow_dispatch:
+
+env:
+  BASE_IMAGE: ghcr.io/hubverse-org/hubpredevalsdata-base
+  DEV_IMAGE: ghcr.io/hubverse-org/hubpredevalsdata-dev
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # R bumps are coordinated (chain-build's consistency check enforces it),
+      # so base and dev always share the same R minor; derive it once.
+      - name: Derive R-minor tag from base.Dockerfile rocker pin
+        id: rminor
+        run: |
+          set -euo pipefail
+          value=$(awk -F: '/^FROM rocker\/r-ver:/ { print $NF; exit }' docker/base.Dockerfile)
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push base
+        id: build-base
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/base.Dockerfile
+          tags: ${{ env.BASE_IMAGE }}:${{ steps.rminor.outputs.value }}
+          push: true
+          cache-from: type=gha,scope=base
+          cache-to: type=gha,scope=base,mode=max
+
+      - name: Attest base
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.BASE_IMAGE }}
+          subject-digest: ${{ steps.build-base.outputs.digest }}
+          push-to-registry: true
+
+      # dev.Dockerfile's `FROM` references the base we just pushed; buildx
+      # pulls it from GHCR.
+      - name: Build and push dev
+        id: build-dev
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/dev.Dockerfile
+          tags: ${{ env.DEV_IMAGE }}:${{ steps.rminor.outputs.value }}
+          push: true
+          cache-from: type=gha,scope=dev
+          cache-to: type=gha,scope=dev,mode=max
+
+      - name: Attest dev
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.DEV_IMAGE }}
+          subject-digest: ${{ steps.build-dev.outputs.digest }}
+          push-to-registry: true

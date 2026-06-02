@@ -1,0 +1,108 @@
+name: Chain build integration test
+
+on:
+  # Each path below affects at least one of base/dev/production at build time.
+  # PRs that touch only other files (e.g. README.md) skip this workflow.
+  pull_request:
+    branches: [main]
+    paths:
+      - docker/base.Dockerfile
+      - docker/dev.Dockerfile
+      - Dockerfile
+      - renv.lock
+      - renv/activate.R
+      - .Rprofile
+      - DESCRIPTION
+      - scripts/create-predevals-data.R
+      - scripts/test.R
+      - scripts/update.R
+      - tests/testthat/test-predevals-output.R
+      - .github/workflows/chain-build.yaml
+
+env:
+  BASE_IMAGE: ghcr.io/hubverse-org/hubpredevalsdata-base
+  DEV_IMAGE: ghcr.io/hubverse-org/hubpredevalsdata-dev
+  PROD_IMAGE: hubpredevalsdata-docker
+  PROD_TAG: chain-test
+
+jobs:
+  chain-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # R bumps must be coordinated in one PR (base.Dockerfile rocker pin and
+      # the two FROM tags must all agree), because renv.lock package versions
+      # are tied to the R minor's binary repos. Production's R-version guard
+      # catches a runtime mismatch as a fallback; this PR-time check catches
+      # the same problem earlier with a clearer error message.
+      - name: Verify R-minor pin is coordinated across Dockerfiles
+        id: rminor
+        run: |
+          set -euo pipefail
+          base=$(awk -F: '/^FROM rocker\/r-ver:/ { print $NF; exit }' docker/base.Dockerfile)
+          prod=$(awk -F: '/^FROM ghcr.io.*hubpredevalsdata-base:/ { print $NF; exit }' Dockerfile)
+          dev=$(awk -F: '/^FROM ghcr.io.*hubpredevalsdata-base:/ { print $NF; exit }' docker/dev.Dockerfile)
+          if [ "$base" != "$prod" ] || [ "$base" != "$dev" ]; then
+            echo "::error::R-minor pin not coordinated: base.Dockerfile=$base Dockerfile=$prod dev.Dockerfile=$dev. R bumps must update all three Dockerfiles + renv.lock together in one PR."
+            exit 1
+          fi
+          echo "value=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # Tagged as ghcr.io/.../base:<rminor> so dev/prod's `FROM` resolves to
+      # this just-built local image (`load: true` exports it into the docker
+      # daemon's image store, which is what `docker build` consults first).
+      # GHA cache keeps the apt+renv-install layers cheap on repeat runs.
+      - name: Build base (cached, loaded to local daemon)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/base.Dockerfile
+          tags: ${{ env.BASE_IMAGE }}:${{ steps.rminor.outputs.value }}
+          load: true
+          cache-from: type=gha,scope=base
+          cache-to: type=gha,scope=base,mode=max
+
+      # Plain `docker build` (no buildx) for dev and prod: both Dockerfiles'
+      # `FROM` lines point at the base we loaded into the local image store
+      # above, which the docker daemon resolves without a registry round-trip.
+      # Production's R-version guard (inside Dockerfile, before renv::restore)
+      # runs as part of this build.
+      - name: Build dev
+        run: docker build -f docker/dev.Dockerfile -t "${DEV_IMAGE}:${{ steps.rminor.outputs.value }}" .
+
+      - name: Build production
+        run: docker build -f Dockerfile -t "${PROD_IMAGE}:${PROD_TAG}" .
+
+      # Strategy: drive the pipeline with the dashboard-test-hub fixture and a
+      # live predevals-config from dashboard-test-hub-dashboard, then run the
+      # testthat assertions in tests/testthat/. Schema validation of the input
+      # config happens inside generate_eval_data(), so a misconfigured config
+      # fails the pipeline step before we reach test.R.
+      - name: Generate predevals data and run testthat
+        run: |
+          git clone https://github.com/hubverse-org/dashboard-test-hub.git
+          curl -sSL -o predevals-config.yml \
+            https://raw.githubusercontent.com/hubverse-org/dashboard-test-hub-dashboard/main/predevals-config.yml
+          mkdir -p out
+          echo "::group::Generate predevals data against dashboard-test-hub"
+          docker run --rm -v "$(pwd)":"/project" \
+            "${PROD_IMAGE}:${PROD_TAG}" \
+            create-predevals-data.R \
+            -h dashboard-test-hub \
+            -d dashboard-test-hub/target-data/oracle-output.csv \
+            -c predevals-config.yml \
+            -o out
+          echo "::endgroup::"
+          echo "::group::Run testthat tests on predevals output"
+          docker run --rm -v "$(pwd)":"/project" \
+            "${PROD_IMAGE}:${PROD_TAG}" \
+            test.R -o out
+          echo "::endgroup::"
