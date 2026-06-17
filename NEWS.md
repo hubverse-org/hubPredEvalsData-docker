@@ -1,5 +1,23 @@
 # hubPredEvalsData-docker (development version)
 
+## Orchestrator script
+
+* `scripts/create-predevals-data.R` now discovers oracle-output target data
+  from the hub via `hubData::connect_target_oracle_output(hub_path)` by
+  default, supporting CSV, parquet, and partitioned parquet layouts per
+  the hubverse target-data spec. The `-d <oracle>` argument is retained as
+  a deprecated back-compatibility option (single file path only) and emits
+  a loud stderr warning when used; it will be removed in a future major
+  release. Added a `--legacy-oracle-fallback <url>` flag used as a fallback
+  when hubData discovery fails, intended for the control-room workflow's
+  deprecation window (#6, see also
+  hubverse-org/hub-dashboard-control-room#108).
+* Replaced the inline `predevals-options.json` assembly block with a single
+  call to `hubPredEvalsData::generate_predevals_options(hub_path, config_path)`.
+  The script is now an orchestrator: parse args, resolve oracle, call
+  `generate_eval_data()`, call `generate_predevals_options()`, write JSON.
+  Requires hubPredEvalsData >= 1.1.0 (#22).
+
 ## Production image
 
 * Production Dockerfile now builds on the shared base image. Apt/locale/renv
@@ -42,6 +60,9 @@
   unnecessary rebuilds (#26).
 * Bumped pinned versions of `docker/*` and `actions/*` GitHub Actions within
   their current majors. Cross-major bumps tracked separately in #30.
+* `chain-build.yaml` and `publish-production.yaml` invoke
+  `create-predevals-data.R` without `-d`, exercising the new hubData-discovery
+  default introduced in this release (see Orchestrator script section above).
 
 ## Documentation and release infrastructure
 

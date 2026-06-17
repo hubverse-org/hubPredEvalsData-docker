@@ -1,11 +1,11 @@
 # Docker container for hubPredEvalsData generation
 
-This docker container is a wrapper around
-`hubPredEvalsData::generate_evals_data()` and hosts the in-development code
-from
+This docker container wraps `hubPredEvalsData::generate_eval_data()` and
+`hubPredEvalsData::generate_predevals_options()`, hosting the in-development
+code from
 [hubverse-org/hubPredEvalsData](https://github.com/hubverse-org/hubPredEvalsData),
-which is used to generate tables of evaluation data from a hub's [oracle
-output](https://docs.hubverse.io/en/latest/user-guide/target-data.html#oracle-output).
+which together generate the score tables and `predevals-options.json` the
+evals dashboard reads from a hub's [oracle output](https://docs.hubverse.io/en/latest/user-guide/target-data.html#oracle-output).
 
 The image is built and deployed to the GitHub Container Registry (https://ghcr.io).
 You can find the [latest version of the
@@ -20,9 +20,17 @@ docker pull ghcr.io/hubverse-org/hubpredevalsdata-docker:latest
 
 ## Usage
 
-The main usage for this image is a step in [the hub dashboard control
-room](https://github.com/hubverse-org/hub-dashboard-control-room) that builds
-evals data if it exists.
+This image is invoked in two contexts:
+
+- **CI**: by the [hub-dashboard-control-room](https://github.com/hubverse-org/hub-dashboard-control-room)
+  reusable workflow as part of the dashboard data pipeline. This is the
+  primary production caller; every dashboard that consumes the control-room
+  workflow picks up the `:latest` tag automatically on the next run. See the
+  hubverse docs on [dashboard operational workflows](https://docs.hubverse.io/en/latest/developer/dashboard-workflows.html)
+  for the full pipeline context.
+- **Local**: directly via `docker run` for testing, debugging, or one-off
+  generation against a local hub clone. See the [Example](#example) below
+  and the hubverse docs on the [local dashboard workflow](https://docs.hubverse.io/en/latest/developer/dashboard-local.html).
 
 The container packages the `create-predevals-data.R` script, which will display
 help documentation if you pass `--help` to it.
@@ -38,27 +46,39 @@ Calculate eval scores data and a predevals-config.json file
 
 USAGE
 
-   create-predevals-data.R [--help] -h </path/to/hub> -c <cfg> -d <oracle> [-o <dir>]
+   create-predevals-data.R [--help] -h </path/to/hub> -c <cfg> [-o <dir>] \
+     [-d <oracle>] [--legacy-oracle-fallback <url>]
 
 ARGUMENTS
 
-  --help             print help and exit
-  -h </path/to/hub>  path to a local copy of the hub
-  -c <cfg>           path or URL of predevals config file
-  -d <oracle>        path or URL to oracle output data
-  -o <dir>           output directory
+  --help                          print help and exit
+  -h </path/to/hub>               path to a local copy of the hub
+  -c <cfg>                        path or URL of predevals config file
+  -o <dir>                        output directory
+  -d <oracle>                     [DEPRECATED] path or URL to a single
+                                  oracle-output file. When supplied, used
+                                  directly and a deprecation warning is
+                                  printed. When absent, oracle output is
+                                  auto-discovered from <hub>/target-data/
+                                  via hubData (supports CSV, parquet, and
+                                  partitioned parquet per hubverse spec).
+  --legacy-oracle-fallback <url>  [TRANSITIONAL] URL to read oracle output
+                                  from if hubData auto-discovery fails.
+                                  Intended for the control-room workflow's
+                                  deprecation window. Will be removed once
+                                  dashboards are migrated.
 
 EXAMPLE
 
 ```bash
-prefix="https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads"
+prefix="https://raw.githubusercontent.com/hubverse-org/dashboard-test-hub-dashboard/refs/heads"
 cfg="${prefix}/main/predevals-config.yml"
-oracle="${prefix}/oracle-data/oracle-output.csv"
+mkdir -p evals
 
 tmp=$(mktemp -d)
-git clone https://github.com/cdcepi/FluSight-forecast-hub.git $tmp
+git clone https://github.com/hubverse-org/dashboard-test-hub.git $tmp
 
-create-predevals-data.R -h $tmp -c $cfg -d $oracle
+create-predevals-data.R -h $tmp -c $cfg -o evals
 ```
 ````
 
@@ -73,10 +93,10 @@ cd flu-metrocast
 mkdir -p predevals/data
 cfg=https://raw.githubusercontent.com/reichlab/metrocast-dashboard/refs/heads/main/predevals-config.yml
 
-# run the container
+# run the container (oracle is auto-discovered from /project/target-data/)
 docker run --rm -it --platform=linux/amd64 -v "$(pwd)":"/project" \
 ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
-create-predevals-data.R -h /project -c $cfg -d /project/target-data/oracle-output.csv -o /project/predevals/data
+create-predevals-data.R -h /project -c $cfg -o /project/predevals/data
 ```
 
 ## Dependency management
@@ -185,8 +205,24 @@ docker build --platform linux/amd64 -f docker/dev.Dockerfile \
 
 ### Updating `renv.lock`
 
-Mount the project directory into the dev container and run `update.R`. This
-is the **only** workflow that modifies the host lockfile:
+Three patterns, depending on what you want to do alongside the update:
+
+| Goal | Pattern |
+|---|---|
+| Just refresh the lockfile, no verification. | [Just update (ephemeral)](#just-update-ephemeral) |
+| Refresh the lockfile *and* confirm it produces a working pipeline. | [Update + verify (ephemeral, one-shot)](#update--verify-ephemeral-one-shot) |
+| Update, verify, and keep iterating in the same container (e.g. trying a dev branch of an upstream package alongside the bump). | [Update + verify + explore (persistent)](#update--verify--explore-persistent) |
+
+All three bind-mount your project at `/project` and write the new lockfile back
+to your host, which is what you usually want when bumping `renv.lock`. If you
+specifically want to smoke-test a dev package version *without* modifying your
+`renv.lock`, see [Ephemeral dev testing](#ephemeral-dev-testing) below instead
+(no project mount, lockfile stays in the container).
+
+#### Just update (ephemeral)
+
+Runs `update.R` and writes the refreshed lockfile back to your host. The
+container's package cache is thrown away with the container.
 
 ```bash
 docker run --rm --platform linux/amd64 \
@@ -198,11 +234,90 @@ If there are updates, the lockfile will change and you will need to commit it.
 The PR's chain-build CI validates the new lockfile end-to-end; the production
 image picks it up on the next release (`v*` tag).
 
+#### Update + verify (ephemeral, one-shot)
+
+Single `docker run --rm` that updates the lockfile, stages the canonical test
+hub and dashboard config in a temporary workspace, runs the pipeline, and runs
+testthat. The container disappears at the end; only the lockfile change
+persists on host. Good for routine PRs where you want a quick sanity check
+before committing.
+
+```bash
+docker run --rm --platform linux/amd64 \
+  -v "$(pwd)":/project \
+  -v "$(mktemp -d)":/work \
+  -w /project \
+  ghcr.io/hubverse-org/hubpredevalsdata-dev:4.5 \
+  bash -lc 'set -euo pipefail
+    Rscript scripts/update.R
+    git clone https://github.com/hubverse-org/dashboard-test-hub.git /work/dashboard-test-hub
+    curl -sSL -o /work/predevals-config.yml \
+      https://raw.githubusercontent.com/hubverse-org/dashboard-test-hub-dashboard/main/predevals-config.yml
+    mkdir -p /work/out
+    Rscript scripts/create-predevals-data.R \
+      -h /work/dashboard-test-hub -c /work/predevals-config.yml -o /work/out
+    PREDEVALS_OUT_DIR=/work/out Rscript -e \
+      "testthat::test_file(\"tests/testthat/test-predevals-output.R\", stop_on_failure = TRUE)"
+  '
+```
+
+The invocation is on the chunky side; an ergonomic improvement (a small
+helper script that wraps the verify steps) is tracked in
+[#38](https://github.com/hubverse-org/hubPredEvalsData-docker/issues/38).
+
+#### Update + verify + explore (persistent)
+
+Start a persistent container with your project mounted, run `update.R` inside
+it (writes the lockfile back to host *and* populates the container's renv
+cache in one step), then run as many pipeline/test commands as you want
+against the same container. Good for exploratory work where one verification
+pass isn't enough (e.g. iterating with a dev branch of an upstream package
+alongside the lockfile bump).
+
+```bash
+# 1. Start the persistent container
+docker run -d --platform linux/amd64 --name dev-test \
+  -v "$(pwd)":/project \
+  -v "$(mktemp -d)":/work \
+  -w /project \
+  ghcr.io/hubverse-org/hubpredevalsdata-dev:4.5 sleep infinity
+
+# 2. Update the lockfile (writes to host, populates container cache)
+docker exec dev-test Rscript scripts/update.R
+
+# 3. Stage test fixtures once
+docker exec dev-test bash -lc '
+  git clone https://github.com/hubverse-org/dashboard-test-hub.git /work/dashboard-test-hub
+  curl -sSL -o /work/predevals-config.yml \
+    https://raw.githubusercontent.com/hubverse-org/dashboard-test-hub-dashboard/main/predevals-config.yml
+  mkdir -p /work/out
+'
+
+# 4. Run the pipeline + tests (repeat as often as you like)
+docker exec dev-test bash -lc '
+  Rscript scripts/create-predevals-data.R \
+    -h /work/dashboard-test-hub -c /work/predevals-config.yml -o /work/out
+  PREDEVALS_OUT_DIR=/work/out Rscript -e \
+    "testthat::test_file(\"tests/testthat/test-predevals-output.R\", stop_on_failure = TRUE)"
+'
+
+# 5. Optionally layer a dev branch of an upstream package and re-run step 4
+docker exec dev-test Rscript -e \
+  'renv::install("hubverse-org/hubPredEvalsData@some-branch")'
+
+# 6. Clean up when done
+docker stop dev-test && docker rm dev-test
+```
+
 ### Ephemeral dev testing
 
-Use a named container for persistent testing sessions. Packages are installed
-at runtime from r-universe/CRAN (~2 min), then dev packages can be layered on.
-Nothing is written back to the host.
+For smoke-testing dev versions of upstream packages (e.g. a `hubPredEvalsData`
+branch or PR) *without* modifying your local `renv.lock`. The container is
+mounted with no project directory, so any `renv::install(..., lock = TRUE)`
+calls inside it only touch the container's lockfile, not your host's.
+
+Packages are installed at runtime from r-universe/CRAN (~2 min), then dev
+packages can be layered on. Nothing is written back to the host.
 
 ```bash
 # Start a persistent dev container

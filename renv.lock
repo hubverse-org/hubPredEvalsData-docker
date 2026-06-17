@@ -1641,10 +1641,10 @@
     },
     "hubPredEvalsData": {
       "Package": "hubPredEvalsData",
-      "Version": "1.0.0",
+      "Version": "1.1.0",
       "Source": "Repository",
       "Title": "Data Creation for Hub Prediction Evaluations via predevals",
-      "Authors@R": "c( person(\"Evan\", \"Ray\", , \"elray@umass.edu\", role = c(\"aut\", \"cre\")) )",
+      "Authors@R": "c( person(\"Evan\", \"Ray\", , \"elray@umass.edu\", role = \"aut\"), person(\"Anna\", \"Krystalli\", , \"annakrystalli@googlemail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-2378-4915\")) )",
       "Description": "This package generates data objects with scores for predictions in a hub, to be displayed on a dashboard using predevals.",
       "License": "MIT + file LICENSE",
       "Imports": [
@@ -1655,12 +1655,13 @@
         "hubUtils",
         "jsonlite",
         "jsonvalidate",
+        "methods",
         "purrr",
         "rlang",
-        "scoringutils (>= 2.0.0.9000)",
+        "scoringutils (>= 2.2.0)",
         "yaml"
       ],
-      "Remotes": "hubverse-org/hubData, hubverse-org/hubEvals, hubverse-org/hubUtils, epiforecasts/scoringutils",
+      "Additional_repositories": "https://hubverse-org.r-universe.dev",
       "Encoding": "UTF-8",
       "Roxygen": "list(markdown = TRUE)",
       "RoxygenNote": "7.3.3",
@@ -1675,11 +1676,11 @@
       "Config/pak/sysreqs": "cmake git make libicu-dev libuv1-dev libssl-dev libnode-dev libx11-dev",
       "Repository": "https://hubverse-org.r-universe.dev",
       "RemoteUrl": "https://github.com/hubverse-org/hubPredEvalsData",
-      "RemoteRef": "v1.0.0",
-      "RemoteSha": "76c08213a917f8582b613588bba8f315cbc2bdf7",
+      "RemoteRef": "v1.1.0",
+      "RemoteSha": "1d4a7f6e0c3a9d0bc853a3825b743badec172360",
       "NeedsCompilation": "no",
-      "Author": "Evan Ray [aut, cre]",
-      "Maintainer": "Evan Ray <elray@umass.edu>",
+      "Author": "Evan Ray [aut], Anna Krystalli [aut, cre] (ORCID: <https://orcid.org/0000-0002-2378-4915>)",
+      "Maintainer": "Anna Krystalli <annakrystalli@googlemail.com>",
       "Depends": [
         "R (>= 4.1.0)"
       ]
