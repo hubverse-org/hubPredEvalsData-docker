@@ -1,4 +1,4 @@
-# hubPredEvalsData-docker (development version)
+# hubPredEvalsData-docker 1.1.0
 
 ## Orchestrator script
 
