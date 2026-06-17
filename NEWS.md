@@ -1,4 +1,11 @@
-# hubPredEvalsData-docker (development version)
+# hubPredEvalsData-docker 1.1.1
+
+## Dependencies
+
+* Updated `renv.lock` to pull hubPredEvalsData 1.1.1, which fixes a pipeline
+  failure on hubs whose oracle output carries a versioned `as_of` column (for
+  example FluSight). Such hubs previously aborted during scoring (#42, fix in
+  hubverse-org/hubPredEvalsData#70).
 
 # hubPredEvalsData-docker 1.1.0
 
