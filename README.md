@@ -58,6 +58,15 @@ package binaries instead of compiling everything from source (see the note under
 [Getting the images](#getting-the-images)). It also builds the same amd64 image the
 dashboard eval pipeline uses, so it reproduces that build environment more accurately.
 
+> [!NOTE]
+> **Why no native arm64 image?** The image is scoped to generating dashboard data on
+> amd64 CI, so it is published for amd64 only. A native arm64 image would have to
+> compile every R package from source at build time (Posit Package Manager serves
+> Linux binaries for amd64 only), which greatly increases build times, and it adds the
+> ongoing cost of building, testing, and publishing a second architecture. Running the
+> amd64 image under emulation already covers local arm64 use, so multi-arch is not
+> currently worth that trade-off.
+
 ### Help
 
 The container packages the `create-predevals-data.R` script, which will display
