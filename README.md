@@ -8,6 +8,10 @@ which together generate the score tables and `predevals-options.json` the
 evals dashboard reads from a hub's [oracle output](https://docs.hubverse.io/en/latest/user-guide/target-data.html#oracle-output).
 
 The image is built and deployed to the GitHub Container Registry (https://ghcr.io).
+It is published for the `linux/amd64` architecture only, since its job is to
+generate dashboard data on amd64 CI. It still runs on Apple Silicon (arm64)
+Macs under emulation; see [Running locally on Apple Silicon](#running-locally-on-apple-silicon-arm64).
+
 You can find the [latest version of the
 image](https://github.com/hubverse-org/hubPredEvalsData-docker/pkgs/container/hubpredevalsdata-docker/340871974?tag=latest)
 by using the `latest` tag:
@@ -32,14 +36,50 @@ This image is invoked in two contexts:
   generation against a local hub clone. See the [Example](#example) below
   and the hubverse docs on the [local dashboard workflow](https://docs.hubverse.io/en/latest/developer/dashboard-local.html).
 
+### Running locally on Apple Silicon (arm64)
+
+The published images are `linux/amd64` only (see above). To run them on an Apple
+Silicon (arm64) Mac you need amd64 emulation enabled, otherwise `docker run` fails
+with:
+
+```
+exec /usr/local/bin/create-predevals-data.R: exec format error
+```
+
+That error is the amd64 entrypoint failing to start on an arm64 host. Enable amd64
+emulation in Docker Desktop (**Settings → General → "Use Rosetta for x86_64/amd64
+emulation"**, or ensure QEMU emulation is otherwise available), and the amd64 image
+runs transparently.
+
+On arm64, `docker run` also prints a harmless `platform does not match host` warning;
+add `--platform=linux/amd64` to silence it. When *building* the images
+locally on arm64, `--platform linux/amd64` matters more: it pulls fast prebuilt
+package binaries instead of compiling everything from source (see the note under
+[Getting the images](#getting-the-images)). It also builds the same amd64 image the
+dashboard eval pipeline uses, so it reproduces that build environment more accurately.
+
+> [!NOTE]
+> **Why no native arm64 image?** The image is scoped to generating dashboard data on
+> amd64 CI, so it is published for amd64 only. A native arm64 image would have to
+> compile every R package from source at build time (Posit Package Manager serves
+> Linux binaries for amd64 only), which greatly increases build times, and it adds the
+> ongoing cost of building, testing, and publishing a second architecture. Running the
+> amd64 image under emulation already covers local arm64 use, so multi-arch is not
+> currently worth that trade-off.
+
+### Help
+
 The container packages the `create-predevals-data.R` script, which will display
 help documentation if you pass `--help` to it.
 
 ```sh
-docker run --rm -it \
+docker run --rm -it --platform=linux/amd64 \
 ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
 create-predevals-data.R --help
 ```
+
+`--platform=linux/amd64` silences the platform-mismatch warning on Apple Silicon
+(see [Running locally on Apple Silicon](#running-locally-on-apple-silicon-arm64)).
 
 ````
 Calculate eval scores data and a predevals-config.json file
@@ -374,11 +414,11 @@ Three workflows in `.github/workflows/`, each scoped to one concern:
 |---|---|---|---|
 | `chain-build.yaml` | PR touching any file that affects an image | Builds base, dev, and production locally in one runner; runs testthat against the `dashboard-test-hub` fixture using the just-built production image. | The R-minor pin in `docker/base.Dockerfile` is coordinated with the `FROM` tags in `Dockerfile` and `docker/dev.Dockerfile`; the full chain builds end-to-end; production produces correct output for a real hub config. |
 | `publish-base-dev.yaml` | Push to `main` when `docker/base.Dockerfile`, `docker/dev.Dockerfile`, or files dev embeds change | Builds and pushes `ghcr.io/hubverse-org/hubpredevalsdata-base:<R minor>` and `:<R minor>` for `dev` to GHCR. | n/a (publishing only; PR-time tests already ran via `chain-build` before merge). |
-| `publish-production.yaml` | Push of a `v*` tag (or manual `workflow_dispatch` from main with `publish=true`) | Builds the production image from the published base, runs testthat one more time, then pushes the release tag to GHCR with build-provenance attestation. | Drift between the chain-build-tested state and the release-time environment (e.g. base has been republished since the PR merged). |
+| `publish-production.yaml` | Push of a `v*` tag (or manual `workflow_dispatch` from main with `publish=true`) | Builds the production image from the published base, runs testthat one more time, then pushes the release tag and `:latest` to GHCR with build-provenance attestation. | Drift between the chain-build-tested state and the release-time environment (e.g. base has been republished since the PR merged). |
 
 **Merge vs tag lifecycle.** `base` and `dev` publish on every relevant merge to `main`, so infrastructure changes (e.g. an R-minor bump) become available immediately for dev/testing. Production publishes only on `v*` tags, so the already-released production image at the last tag is untouched on merge and continues to serve consumers until you cut a new release tag, at which point the new production image picks up whatever `base` is current. Per-release changes are tracked in [`NEWS.md`](NEWS.md).
 
 **R-version guard.** Production's `Dockerfile` has a `RUN` step before `renv::restore()` that fails the build if `renv.lock`'s recorded R minor doesn't match the image's running R. This complements the pin-coordination check in `chain-build`: the workflow check verifies the three Dockerfiles agree on a version (by inspecting their `FROM` strings); the guard verifies `renv.lock` was regenerated against that version (by inspecting the running R at build time).
 
-**No `:latest` tags.** Base, dev, and production all use explicit version tags. Pull by the version you want; there is intentionally no floating `:latest`, consistent with how `rocker/r-ver:4.5` is itself a minor pin.
+**Tags and `:latest`.** Base and dev use explicit R-minor version tags only (`:4.5`); there is intentionally no floating `:latest` for them, consistent with how `rocker/r-ver:4.5` is itself a minor pin. Production is different: each `v*` release publishes both the version tag (e.g. `:v1.1.1`) and a `:latest` tag pointing at the same build. The `:latest` tag is generated automatically by `docker/metadata-action`'s default `latest=auto` flavor, so it advances on every release with no manual step. Production maintains `:latest` because the control-room workflow consumes the image by that tag.
 
