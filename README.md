@@ -139,6 +139,54 @@ ghcr.io/hubverse-org/hubpredevalsdata-docker:latest \
 create-predevals-data.R -h /project -c $cfg -o /project/predevals/data
 ```
 
+## Releasing the production image
+
+This covers the production image only; the
+[base and dev images](#base-and-dev-docker-images) publish automatically on
+merge to `main`. Most releases are a `renv.lock` refresh plus a version bump
+(see [Dependency management](#dependency-management)).
+
+Merging does **not** publish the production image. Pushing the `v*` tag does
+(step 5). Until then consumers stay on the previous release.
+
+1. **Branch off `main` and refresh `renv.lock`** using one of the
+   [Updating `renv.lock`](#updating-renvlock) patterns. Prefer an update *and
+   verify* pattern over a bare update, so the new lockfile is known to produce
+   a working pipeline before it reaches CI.
+
+2. **Bump the version** with `usethis::use_version()`, which updates
+   the version in `DESCRIPTION` and finalises the `NEWS.md` heading.
+
+3. **Open the PR and request review.** `chain-build` runs on it, building base,
+   dev and production in one runner and testing production against
+   `dashboard-test-hub`.
+
+4. **Merge to `main`** with a merge commit once approved and green.
+
+5. **Cut a signed tag on `main`.** This is the step that publishes the image.
+
+   ```bash
+   git checkout main && git pull
+   git tag -s v1.2.0 -m "<short summary of the release>"
+   git push origin v1.2.0
+   ```
+
+   `publish-production.yaml` then builds production from the published base,
+   runs the testthat suite once more, and pushes both the version tag and
+   `:latest` to GHCR with build-provenance attestation. The workflow does not
+   create the GitHub release, so publish that with
+   `usethis::use_github_release()`, which drafts it from the `NEWS.md` section
+   for this version and attaches it to the tag pushed above.
+
+6. **Verify downstream.** Consumers pick up `:latest` on their next run, so
+   trigger a dashboard build (for example the `dashboard-test-hub-dashboard`
+   "Rebuild Data" run) and confirm it is green against the new image. This is
+   the first point at which the release is exercised against a hub other than
+   the `dashboard-test-hub` fixture.
+
+7. **Open a post-release PR** setting the next development version with
+   `usethis::use_dev_version()`.
+
 ## Dependency management
 
 This project uses `renv` with the `explicit` snapshot type. Dependencies are
@@ -421,4 +469,3 @@ Three workflows in `.github/workflows/`, each scoped to one concern:
 **R-version guard.** Production's `Dockerfile` has a `RUN` step before `renv::restore()` that fails the build if `renv.lock`'s recorded R minor doesn't match the image's running R. This complements the pin-coordination check in `chain-build`: the workflow check verifies the three Dockerfiles agree on a version (by inspecting their `FROM` strings); the guard verifies `renv.lock` was regenerated against that version (by inspecting the running R at build time).
 
 **Tags and `:latest`.** Base and dev use explicit R-minor version tags only (`:4.5`); there is intentionally no floating `:latest` for them, consistent with how `rocker/r-ver:4.5` is itself a minor pin. Production is different: each `v*` release publishes both the version tag (e.g. `:v1.1.1`) and a `:latest` tag pointing at the same build. The `:latest` tag is generated automatically by `docker/metadata-action`'s default `latest=auto` flavor, so it advances on every release with no manual step. Production maintains `:latest` because the control-room workflow consumes the image by that tag.
-
