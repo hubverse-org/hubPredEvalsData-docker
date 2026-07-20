@@ -154,8 +154,8 @@ Merging does **not** publish the production image. Pushing the `v*` tag does
    verify* pattern over a bare update, so the new lockfile is known to produce
    a working pipeline before it reaches CI.
 
-2. **Bump the version** with `usethis::use_version()`, which updates
-   the version in `DESCRIPTION` and finalises the `NEWS.md` heading.
+2. **Bump the version.** Set `Version` in `DESCRIPTION` to the release version,
+   and replace the `(development version)` heading in `NEWS.md` with it.
 
 3. **Open the PR and request review.** `chain-build` runs on it, building base,
    dev and production in one runner and testing production against
@@ -174,9 +174,12 @@ Merging does **not** publish the production image. Pushing the `v*` tag does
    `publish-production.yaml` then builds production from the published base,
    runs the testthat suite once more, and pushes both the version tag and
    `:latest` to GHCR with build-provenance attestation. The workflow does not
-   create the GitHub release, so publish that with
-   `usethis::use_github_release()`, which drafts it from the `NEWS.md` section
-   for this version and attaches it to the tag pushed above.
+   create the GitHub release, so publish that separately with the notes taken
+   from this version's `NEWS.md` section:
+
+   ```bash
+   gh release create v1.2.0 --title v1.2.0 --notes-file <notes> --verify-tag
+   ```
 
 6. **Verify downstream.** Consumers pick up `:latest` on their next run, so
    trigger a dashboard build (for example the `dashboard-test-hub-dashboard`
@@ -184,8 +187,8 @@ Merging does **not** publish the production image. Pushing the `v*` tag does
    the first point at which the release is exercised against a hub other than
    the `dashboard-test-hub` fixture.
 
-7. **Open a post-release PR** setting the next development version with
-   `usethis::use_dev_version()`.
+7. **Open a post-release PR** setting `Version` to `X.Y.Z.9000` and adding a
+   fresh `(development version)` heading to `NEWS.md`.
 
 ## Dependency management
 
