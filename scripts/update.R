@@ -12,6 +12,10 @@ stopifnot("CRAN is not set; run update.R in the dev image" = nzchar(cran))
 # syncs CRAN during the day, and `renv::restore()` in the production
 # build must find the same versions later.
 cran <- sub("[^/]+$", format(Sys.Date() - 1), cran)
+stopifnot(
+  "CRAN URL does not end in a snapshot date" =
+    grepl("/\\d{4}-\\d{2}-\\d{2}$", cran)
+)
 
 options(
   repos = c(
