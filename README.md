@@ -205,6 +205,16 @@ lockfile generation. This approach:
 > it to the `DESCRIPTION` file's `Imports` field for it to be captured in the
 > lockfile.
 
+`scripts/update.R` resolves the hubverse packages from r-universe and every
+other package from the Posit Package Manager CRAN snapshot dated the day the
+refresh runs, and records that snapshot in `renv.lock`. The rocker base image
+pins its own CRAN snapshot to the day its R patch release was built, and that
+date moves only when rocker publishes a new image, so a refresh resolved
+through it would leave every CRAN dependency frozen at that date while the
+hubverse packages moved. Production's `renv::restore()` installs from the
+snapshot recorded in `renv.lock`, so a refresh moves all packages together
+and the production build remains reproducible.
+
 ## Base and dev Docker images
 
 Two additional Dockerfiles in `docker/` support local development and
