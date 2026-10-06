@@ -5,7 +5,7 @@
 Refreshed `renv.lock` to pull the latest releases of the hubverse packages the
 image wraps, hubPredEvalsData 1.2.0 -> 1.3.0 and hubEvals 0.3.1 -> 0.5.0,
 together with scoringutils 2.2.0 -> 2.3.0 and the other CRAN dependencies as
-of the 2026-10-06 CRAN snapshot (#51).
+of the 2026-10-05 CRAN snapshot (#51).
 
 The user-visible changes these bring to the generated dashboard data:
 
@@ -30,12 +30,11 @@ The user-visible changes these bring to the generated dashboard data:
 
 ## Base and dev images
 
-* `scripts/update.R` now resolves CRAN packages from the Posit Package
-  Manager snapshot dated the day the refresh runs, and records that snapshot
-  in `renv.lock`, instead of resolving through the snapshot the rocker base
-  image pins. Previously a refresh updated the hubverse packages while every
-  CRAN dependency stayed frozen at the rocker snapshot date, so a hubverse
-  release that required a newer CRAN package could not be picked up (#51).
+* Refreshing `renv.lock` with `scripts/update.R` now moves the CRAN
+  dependencies to their current releases together with the hubverse
+  packages. Previously CRAN packages stayed at the versions the rocker base
+  image was built against, so a hubverse release that required a newer CRAN
+  package could not be picked up (#51).
 
 # hubPredEvalsData-docker 1.2.0
 

@@ -1,16 +1,17 @@
 #!/usr/bin/env Rscript
 # Refresh renv.lock to the current release of every package.
 #
-# The rocker base image sets `CRAN` to the Posit Package Manager snapshot
-# dated the day its R patch release was built, and that date moves only
-# when rocker publishes a new image. A refresh resolved through it would
-# update the hubverse packages, which r-universe serves current, while
-# every CRAN dependency stayed frozen at that date. Moving the snapshot
-# date to today refreshes all packages together.
-snapshot_date <- "[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+# The rocker base image sets `CRAN` to a dated Posit Package Manager
+# snapshot that does not advance between image builds. Resolving through
+# it would leave every CRAN dependency at that date while r-universe
+# serves the hubverse packages current, so the date is replaced. The
+# README section "Dependency management" gives the full reasoning.
 cran <- Sys.getenv("CRAN")
-stopifnot("CRAN is not a dated P3M snapshot URL" = grepl(snapshot_date, cran))
-cran <- sub(snapshot_date, format(Sys.Date()), cran)
+stopifnot("CRAN is not set; run update.R in the dev image" = nzchar(cran))
+# Yesterday's snapshot, not today's: today's can still change while P3M
+# syncs CRAN during the day, and `renv::restore()` in the production
+# build must find the same versions later.
+cran <- sub("[^/]+$", format(Sys.Date() - 1), cran)
 
 options(
   repos = c(
