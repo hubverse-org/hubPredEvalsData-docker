@@ -1,4 +1,40 @@
-# hubPredEvalsData-docker (development version)
+# hubPredEvalsData-docker 1.3.0
+
+## Dependencies
+
+Refreshed `renv.lock` to pull the latest releases of the hubverse packages the
+image wraps, hubPredEvalsData 1.2.0 -> 1.3.0 and hubEvals 0.3.1 -> 0.5.0,
+together with scoringutils 2.2.0 -> 2.3.0 and the other CRAN dependencies as
+of the 2026-10-05 CRAN snapshot (#51).
+
+The user-visible changes these bring to the generated dashboard data:
+
+* Relative-skill scoring is substantially faster and uses much less memory,
+  which matters most on hubs with many models, such as FluSight. Relative
+  skill values are unchanged (hubverse-org/hubEvals#144,
+  epiforecasts/scoringutils#1221).
+* The number of predictions scored (`n`) in `scores.csv` now counts only
+  forecasts that had a corresponding observation to score against, rather
+  than every submitted prediction. This corrects an overcount wherever a
+  model submitted predictions for units with no observation. In the rare
+  case where this count differs across a target's output types, `scores.csv`
+  reports a separate `n_<output_type>` column per output type in place of
+  the single `n` (hubverse-org/hubPredEvalsData#19).
+* Hubs whose target is identified by `target_id` alone, with no target key
+  task id variable (`target_keys: null`), as used by nowcast hubs, are now
+  supported. Previously these failed partway through the run
+  (hubverse-org/hubPredEvalsData#87).
+* Evaluation data generation is faster on every hub: the hub connection is
+  opened once and reused across targets and evaluation sets
+  (hubverse-org/hubPredEvalsData#82).
+
+## Base and dev images
+
+* Refreshing `renv.lock` with `scripts/update.R` now moves the CRAN
+  dependencies to their current releases together with the hubverse
+  packages. Previously CRAN packages stayed at the versions the rocker base
+  image was built against, so a hubverse release that required a newer CRAN
+  package could not be picked up (#51).
 
 # hubPredEvalsData-docker 1.2.0
 
