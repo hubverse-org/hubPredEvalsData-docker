@@ -33,7 +33,7 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # R bumps must be coordinated in one PR (base.Dockerfile rocker pin and
       # the two FROM tags must all agree), because renv.lock package versions
