@@ -62,7 +62,7 @@ jobs:
           cache-to: type=gha,scope=base,mode=max
 
       - name: Attest base
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.BASE_IMAGE }}
           subject-digest: ${{ steps.build-base.outputs.digest }}
@@ -82,7 +82,7 @@ jobs:
           cache-to: type=gha,scope=dev,mode=max
 
       - name: Attest dev
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.DEV_IMAGE }}
           subject-digest: ${{ steps.build-dev.outputs.digest }}
